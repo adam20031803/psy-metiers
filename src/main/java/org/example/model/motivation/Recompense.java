@@ -9,8 +9,7 @@ public class Recompense {
     private boolean actif;
 
     // Constructeurs
-    public Recompense() {
-    }
+    public Recompense() {}
 
     public Recompense(String titre, String description, String typeRecompense, String conditionObtention) {
         this.titre = titre;

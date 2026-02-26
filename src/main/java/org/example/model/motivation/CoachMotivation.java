@@ -3,16 +3,17 @@ package org.example.model.motivation;
 public class CoachMotivation {
     private int idCoach;
     private String nomCoach;
+    private String email;
     private String style;
     private String description;
     private boolean actif;
 
     // Constructeurs
-    public CoachMotivation() {
-    }
+    public CoachMotivation() {}
 
-    public CoachMotivation(String nomCoach, String style, String description) {
+    public CoachMotivation(String nomCoach,String email, String style, String description) {
         this.nomCoach = nomCoach;
+        this.email = email;
         this.style = style;
         this.description = description;
         this.actif = true;
@@ -33,6 +34,15 @@ public class CoachMotivation {
 
     public void setNomCoach(String nomCoach) {
         this.nomCoach = nomCoach;
+    }
+
+
+    public String getEmail() {
+        return email;
+    }
+
+    public void setEmail(String email) {
+        this.email = email;
     }
 
     public String getStyle() {

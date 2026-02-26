@@ -22,6 +22,8 @@ import java.util.List;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
 
+
+
 import javafx.scene.layout.StackPane;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.ColumnConstraints;
@@ -30,6 +32,7 @@ import javafx.scene.control.Separator;
 import javafx.scene.control.Dialog;
 import javafx.scene.control.ButtonType;
 import java.util.Map;
+
 
 // ===== JAVA IO =====
 import java.io.File;
@@ -49,9 +52,11 @@ import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
 
+
 import java.awt.Color;
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
 import java.text.Normalizer;
+
 
 public class RecompenseController implements Initializable {
 
@@ -70,6 +75,10 @@ public class RecompenseController implements Initializable {
     private Button challengeBtn; // Renommé depuis backBtn
     @FXML
     private Button coachBtn; // Nouveau bouton
+    @FXML
+    private Button dashboardBtn;
+    @FXML
+    private Button homeBtn;
     @FXML
     private Button exportBtn; // Nouveau bouton
 
@@ -140,17 +149,7 @@ public class RecompenseController implements Initializable {
         loadData();
         updateStatistics();
 
-        checkRole();
-
         System.out.println("=== INITIALIZATION RECOMPENSE CONTROLLER END ===");
-    }
-
-    private void checkRole() {
-        if (!org.example.util.Session.isAdmin()) {
-            addBtn.setVisible(false);
-            updateBtn.setVisible(false);
-            deleteBtn.setVisible(false);
-        }
     }
 
     // ================= SETUP LISTVIEW AVEC CARTES PERSONNALISÉES =================
@@ -193,18 +192,15 @@ public class RecompenseController implements Initializable {
                 header.setSpacing(15); // Ajout d'espacement
 
                 // TITRE avec icône agrandie
-                titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: black;"); // Augmenté de
-                                                                                                         // 15 à 18
+                titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: black;"); // Augmenté de 15 à 18
                 titleLabel.setWrapText(true);
                 titleLabel.setMaxWidth(280); // Augmenté de 250 à 280
 
                 // STATUT avec badge plus visible
-                statusLabel.setStyle(
-                        "-fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 12;"); // Augmenté
+                statusLabel.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 4 10; -fx-background-radius: 12;"); // Augmenté
 
                 // TYPE avec GRAND EMOJI
-                typeLabel.setStyle("-fx-text-fill: #f093fb; -fx-font-size: 14px; -fx-font-weight: bold;"); // Augmenté
-                                                                                                           // de 12 à 14
+                typeLabel.setStyle("-fx-text-fill: #f093fb; -fx-font-size: 14px; -fx-font-weight: bold;"); // Augmenté de 12 à 14
                 typeLabel.setGraphicTextGap(8); // Espace entre icône et texte
 
                 // DESCRIPTION
@@ -220,9 +216,7 @@ public class RecompenseController implements Initializable {
                 conditionLabel.setGraphicTextGap(6);
 
                 // POINTS avec GRAND EMOJI
-                pointsLabel.setStyle("-fx-text-fill: #2ECC71; -fx-font-size: 13px; -fx-font-weight: bold;"); // Augmenté
-                                                                                                             // de 11 à
-                                                                                                             // 13
+                pointsLabel.setStyle("-fx-text-fill: #2ECC71; -fx-font-size: 13px; -fx-font-weight: bold;"); // Augmenté de 11 à 13
                 pointsLabel.setGraphicTextGap(6);
 
                 // Configuration de la ligne d'info
@@ -377,8 +371,7 @@ public class RecompenseController implements Initializable {
                     statsBox.setAlignment(Pos.CENTER_RIGHT);
 
                     Label idLabel = new Label("#" + recompense.getIdRecompense());
-                    idLabel.setStyle(
-                            "-fx-font-size: 12px; -fx-text-fill: rgba(255,255,255,0.7); -fx-font-weight: bold;"); // Augmenté
+                    idLabel.setStyle("-fx-font-size: 12px; -fx-text-fill: rgba(255,255,255,0.7); -fx-font-weight: bold;"); // Augmenté
 
                     // Badge pour le type avec GRAND EMOJI
                     HBox typeBadge = new HBox(8); // Espacement augmenté
@@ -387,9 +380,7 @@ public class RecompenseController implements Initializable {
                     typeIcon.setStyle("-fx-font-size: 18px;"); // EMOJI ENORME dans le badge
                     Label typeName = new Label(recompense.getTypeRecompense());
                     typeName.setStyle("-fx-font-size: 12px; -fx-font-weight: bold; -fx-text-fill: black;"); // Augmenté
-                    typeBadge.setStyle(
-                            "-fx-background-color: rgba(240,147,251,0.25); -fx-background-radius: 15; -fx-padding: 6 12;"); // Plus
-                                                                                                                            // grand
+                    typeBadge.setStyle("-fx-background-color: rgba(240,147,251,0.25); -fx-background-radius: 15; -fx-padding: 6 12;"); // Plus grand
                     typeBadge.getChildren().addAll(typeIcon, typeName);
 
                     statsBox.getChildren().addAll(idLabel, typeBadge);
@@ -415,7 +406,8 @@ public class RecompenseController implements Initializable {
                         loadRecompenseData(newVal);
                         updateRecompenseStatistics(newVal);
                     }
-                });
+                }
+        );
 
         // Style de la ListView
         recompenseListView.setStyle("-fx-background-color: transparent; " +
@@ -426,8 +418,7 @@ public class RecompenseController implements Initializable {
     // ================= MÉTHODE POUR LES ICÔNES SELON LE TYPE =================
 
     private String getIconForType(String type) {
-        if (type == null)
-            return "🎁";
+        if (type == null) return "🎁";
 
         switch (type.toLowerCase()) {
             case "médaille":
@@ -465,7 +456,8 @@ public class RecompenseController implements Initializable {
                 "Réduction",
                 "Cadeau",
                 "Accès Premium",
-                "Autre");
+                "Autre"
+        );
         typeComboBox.getSelectionModel().selectFirst();
 
         // Listener pour changer l'icône selon le type
@@ -485,7 +477,8 @@ public class RecompenseController implements Initializable {
                     "VIP",
                     "Spécial",
                     "Événement",
-                    "Autre");
+                    "Autre"
+            );
             categorieComboBox.getSelectionModel().selectFirst();
         }
     }
@@ -499,16 +492,14 @@ public class RecompenseController implements Initializable {
         clearBtn.setOnAction(e -> clearForm());
         searchBtn.setOnAction(e -> searchRecompenses());
 
-        if (refreshBtn != null)
-            refreshBtn.setOnAction(e -> loadData());
+        if (refreshBtn != null) refreshBtn.setOnAction(e -> loadData());
 
         // Navigation
-        if (challengeBtn != null)
-            challengeBtn.setOnAction(e -> goToChallenges());
-        if (coachBtn != null)
-            coachBtn.setOnAction(e -> goToCoaches());
-        if (exportBtn != null)
-            exportBtn.setOnAction(e -> exportToPDF());
+        if (challengeBtn != null) challengeBtn.setOnAction(e -> goToChallenges());
+        if (coachBtn != null) coachBtn.setOnAction(e -> goToCoaches());
+        if (dashboardBtn != null) dashboardBtn.setOnAction(e -> goToDashboard());
+        if (homeBtn != null) homeBtn.setOnAction(e -> onGoHome());
+        if (exportBtn != null) exportBtn.setOnAction(e -> exportToPDF());
 
         // Gestion des associations (à conserver si nécessaire)
         // manageChallengesBtn.setOnAction(e -> manageChallengeAssociations());
@@ -560,14 +551,14 @@ public class RecompenseController implements Initializable {
 
     private void addRecompense() {
         try {
-            if (!validateForm())
-                return;
+            if (!validateForm()) return;
 
             Recompense recompense = new Recompense(
                     titreField.getText().trim(),
                     descField.getText().trim(),
                     typeComboBox.getValue(),
-                    conditionField.getText().trim());
+                    conditionField.getText().trim()
+            );
 
             recompense.setActif(actifCheckBox.isSelected());
 
@@ -590,8 +581,7 @@ public class RecompenseController implements Initializable {
         }
 
         try {
-            if (!validateForm())
-                return;
+            if (!validateForm()) return;
 
             selected.setTitre(titreField.getText().trim());
             selected.setDescription(descField.getText().trim());
@@ -638,8 +628,7 @@ public class RecompenseController implements Initializable {
         });
     }
 
-    // ================= MÉTHODES DE CHARGEMENT ET RÉINITIALISATION
-    // =================
+    // ================= MÉTHODES DE CHARGEMENT ET RÉINITIALISATION =================
 
     private void loadRecompenseData(Recompense recompense) {
         titreField.setText(recompense.getTitre());
@@ -660,10 +649,8 @@ public class RecompenseController implements Initializable {
         descField.clear();
         typeComboBox.getSelectionModel().selectFirst();
         conditionField.clear();
-        if (pointsField != null)
-            pointsField.clear();
-        if (categorieComboBox != null)
-            categorieComboBox.getSelectionModel().selectFirst();
+        if (pointsField != null) pointsField.clear();
+        if (categorieComboBox != null) categorieComboBox.getSelectionModel().selectFirst();
         actifCheckBox.setSelected(true);
         recompenseListView.getSelectionModel().clearSelection();
 
@@ -672,80 +659,52 @@ public class RecompenseController implements Initializable {
         clearFieldError(descField);
         clearFieldError(typeComboBox);
         clearFieldError(conditionField);
-        if (pointsField != null)
-            clearFieldError(pointsField);
+        if (pointsField != null) clearFieldError(pointsField);
 
         // Réinitialiser les statistiques de la récompense sélectionnée
-        if (selectedRecompenseLabel != null)
-            selectedRecompenseLabel.setText("Aucune récompense sélectionnée");
-        if (selectedTypeLabel != null)
-            selectedTypeLabel.setText("-");
-        if (selectedPointsLabel != null)
-            selectedPointsLabel.setText("-");
-        if (selectedCategorieLabel != null)
-            selectedCategorieLabel.setText("-");
+        if (selectedRecompenseLabel != null) selectedRecompenseLabel.setText("Aucune récompense sélectionnée");
+        if (selectedTypeLabel != null) selectedTypeLabel.setText("-");
+        if (selectedPointsLabel != null) selectedPointsLabel.setText("-");
+        if (selectedCategorieLabel != null) selectedCategorieLabel.setText("-");
     }
 
     // ================= MÉTHODES DE NAVIGATION =================
 
     private void goToChallenges() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/org/example/ui/motivation/MainView.fxml"));
-            Parent root = loader.load();
-
-            Stage stage = (Stage) challengeBtn.getScene().getWindow();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
-            stage.setTitle("Gestion des Challenges");
-            stage.show();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible de revenir aux challenges", Alert.AlertType.ERROR);
-        }
+        Stage stage = (Stage) challengeBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Gestion des Challenges");
     }
 
     private void goToCoaches() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/org/example/ui/motivation/coach.fxml"));
-            Parent root = loader.load();
-
-            Stage stage = (Stage) coachBtn.getScene().getWindow();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
-            stage.setTitle("Gestion des Coaches");
-            stage.show();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible d'ouvrir la gestion des coaches", Alert.AlertType.ERROR);
-        }
+        Stage stage = (Stage) coachBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/coach.fxml", "Gestion des Coaches");
     }
 
-    /*
-     * private void exportToPDF() {
-     * // À implémenter: exporter les récompenses en PDF
-     * showAlert("Export PDF", "Fonction d'export PDF à implémenter",
-     * Alert.AlertType.INFORMATION);
-     * }
-     */
+    private void goToDashboard() {
+        Stage stage = (Stage) dashboardBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/dashboard_statistiques.fxml", "📊 Dashboard Statistiques");
+    }
+
+    private void onGoHome() {
+        Stage stage = (Stage) homeBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Challenge Manager Pro");
+    }
+
+/*    private void exportToPDF() {
+        // À implémenter: exporter les récompenses en PDF
+        showAlert("Export PDF", "Fonction d'export PDF à implémenter", Alert.AlertType.INFORMATION);
+    }*/
 
     // ================= MÉTHODES DE STATISTIQUES =================
 
     private void updateStatistics() {
         if (recompenseList.isEmpty()) {
-            if (totalLabel != null)
-                totalLabel.setText("0");
-            if (activesLabel != null)
-                activesLabel.setText("0");
-            if (inactivesLabel != null)
-                inactivesLabel.setText("0");
-            if (typesLabel != null)
-                typesLabel.setText("0");
-            if (popularTypeLabel != null)
-                popularTypeLabel.setText("Aucun");
-            if (avgPointsLabel != null)
-                avgPointsLabel.setText("0");
+            if (totalLabel != null) totalLabel.setText("0");
+            if (activesLabel != null) activesLabel.setText("0");
+            if (inactivesLabel != null) inactivesLabel.setText("0");
+            if (typesLabel != null) typesLabel.setText("0");
+            if (popularTypeLabel != null) popularTypeLabel.setText("Aucun");
+            if (avgPointsLabel != null) avgPointsLabel.setText("0");
             return;
         }
 
@@ -761,22 +720,16 @@ public class RecompenseController implements Initializable {
                 .count();
 
         // Mise à jour des labels avec vérification null
-        if (totalLabel != null)
-            totalLabel.setText(String.valueOf(total));
-        if (activesLabel != null)
-            activesLabel.setText(String.valueOf(actifs));
-        if (inactivesLabel != null)
-            inactivesLabel.setText(String.valueOf(inactifs));
-        if (typesLabel != null)
-            typesLabel.setText(String.valueOf(uniqueTypes));
+        if (totalLabel != null) totalLabel.setText(String.valueOf(total));
+        if (activesLabel != null) activesLabel.setText(String.valueOf(actifs));
+        if (inactivesLabel != null) inactivesLabel.setText(String.valueOf(inactifs));
+        if (typesLabel != null) typesLabel.setText(String.valueOf(uniqueTypes));
     }
 
     private void updateTypeStatistics(List<Recompense> recompenses) {
         if (recompenses.isEmpty()) {
-            if (popularTypeLabel != null)
-                popularTypeLabel.setText("Aucun");
-            if (avgPointsLabel != null)
-                avgPointsLabel.setText("0");
+            if (popularTypeLabel != null) popularTypeLabel.setText("Aucun");
+            if (avgPointsLabel != null) avgPointsLabel.setText("0");
             return;
         }
 
@@ -793,8 +746,7 @@ public class RecompenseController implements Initializable {
     }
 
     private void updateRecompenseStatistics(Recompense recompense) {
-        if (recompense == null)
-            return;
+        if (recompense == null) return;
 
         if (selectedRecompenseLabel != null) {
             selectedRecompenseLabel.setText(recompense.getTitre());
@@ -813,17 +765,15 @@ public class RecompenseController implements Initializable {
         }
     }
 
-    /*
-     * private void showRecompenseDetail(Recompense recompense) {
-     * showAlert("Détails de la récompense",
-     * "🏆 Titre: " + recompense.getTitre() + "\n" +
-     * "🎯 Type: " + recompense.getTypeRecompense() + "\n" +
-     * "📝 Description: " + recompense.getDescription() + "\n" +
-     * "📋 Condition: " + recompense.getConditionObtention() + "\n" +
-     * "⚡ Statut: " + (recompense.isActif() ? "Actif" : "Inactif"),
-     * Alert.AlertType.INFORMATION);
-     * }
-     */
+    /*private void showRecompenseDetail(Recompense recompense) {
+        showAlert("Détails de la récompense",
+                "🏆 Titre: " + recompense.getTitre() + "\n" +
+                        "🎯 Type: " + recompense.getTypeRecompense() + "\n" +
+                        "📝 Description: " + recompense.getDescription() + "\n" +
+                        "📋 Condition: " + recompense.getConditionObtention() + "\n" +
+                        "⚡ Statut: " + (recompense.isActif() ? "Actif" : "Inactif"),
+                Alert.AlertType.INFORMATION);
+    }*/
 
     // ================= CONTRÔLE DE SAISIE =================
 
@@ -949,8 +899,7 @@ public class RecompenseController implements Initializable {
             isValid = false;
         } else if (titre.matches("\\d+")) {
             showFieldError(titreField, "Le titre ne doit pas être composé uniquement de chiffres");
-            showAlert("Validation", "Le titre ne doit pas être composé uniquement de chiffres",
-                    Alert.AlertType.WARNING);
+            showAlert("Validation", "Le titre ne doit pas être composé uniquement de chiffres", Alert.AlertType.WARNING);
             titreField.requestFocus();
             isValid = false;
         } else if (!titre.matches(".*[a-zA-Z].*")) {
@@ -983,24 +932,21 @@ public class RecompenseController implements Initializable {
             if (withoutSpaces.matches("\\d+")) {
                 showFieldError(descField, "La description ne doit pas être composée uniquement de chiffres");
                 if (isValid) {
-                    showAlert("Validation", "La description ne doit pas être composée uniquement de chiffres",
-                            Alert.AlertType.WARNING);
+                    showAlert("Validation", "La description ne doit pas être composée uniquement de chiffres", Alert.AlertType.WARNING);
                     descField.requestFocus();
                 }
                 isValid = false;
             } else if (!description.matches("(?s).*[a-zA-ZÀ-ÿ].*")) {
                 showFieldError(descField, "La description doit contenir au moins une lettre");
                 if (isValid) {
-                    showAlert("Validation", "La description doit contenir au moins une lettre",
-                            Alert.AlertType.WARNING);
+                    showAlert("Validation", "La description doit contenir au moins une lettre", Alert.AlertType.WARNING);
                     descField.requestFocus();
                 }
                 isValid = false;
             } else if (description.length() > 500) {
                 showFieldError(descField, "La description ne doit pas dépasser 500 caractères");
                 if (isValid) {
-                    showAlert("Validation", "La description ne doit pas dépasser 500 caractères",
-                            Alert.AlertType.WARNING);
+                    showAlert("Validation", "La description ne doit pas dépasser 500 caractères", Alert.AlertType.WARNING);
                     descField.requestFocus();
                 }
                 isValid = false;
@@ -1013,8 +959,7 @@ public class RecompenseController implements Initializable {
         if (typeComboBox.getValue() == null || typeComboBox.getValue().isEmpty()) {
             showFieldError(typeComboBox, "Le type de récompense est obligatoire");
             showAlert("Validation", "Le type de récompense est obligatoire", Alert.AlertType.WARNING);
-            if (isValid)
-                typeComboBox.requestFocus();
+            if (isValid) typeComboBox.requestFocus();
             isValid = false;
         } else {
             clearFieldError(typeComboBox);
@@ -1039,8 +984,7 @@ public class RecompenseController implements Initializable {
         } else if (condition.matches("\\d+")) {
             showFieldError(conditionField, "La condition ne doit pas être composée uniquement de chiffres");
             if (isValid) {
-                showAlert("Validation", "La condition ne doit pas être composée uniquement de chiffres",
-                        Alert.AlertType.WARNING);
+                showAlert("Validation", "La condition ne doit pas être composée uniquement de chiffres", Alert.AlertType.WARNING);
                 conditionField.requestFocus();
             }
             isValid = false;
@@ -1073,6 +1017,7 @@ public class RecompenseController implements Initializable {
         alert.showAndWait();
     }
 
+
     private void showRecompenseDetail(Recompense recompense) {
         try {
             // Create a custom dialog
@@ -1094,7 +1039,8 @@ public class RecompenseController implements Initializable {
                             "-fx-padding: 30;" +
                             "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.15), 20, 0, 0, 10);" +
                             "-fx-min-width: 550;" +
-                            "-fx-max-width: 650;");
+                            "-fx-max-width: 650;"
+            );
 
             // ============= EN-TÊTE AVEC BADGE ET TITRE =============
             HBox headerBox = new HBox(15);
@@ -1105,7 +1051,8 @@ public class RecompenseController implements Initializable {
             iconContainer.setStyle(
                     "-fx-background-color: linear-gradient(to right, #667eea, #764ba2);" +
                             "-fx-background-radius: 20;" +
-                            "-fx-padding: 15;");
+                            "-fx-padding: 15;"
+            );
 
             Label mainIcon = new Label(getIconForType(recompense.getTypeRecompense()));
             mainIcon.setStyle("-fx-font-size: 32px; -fx-text-fill: white;");
@@ -1117,7 +1064,8 @@ public class RecompenseController implements Initializable {
             titleLabel.setStyle(
                     "-fx-font-size: 28px;" +
                             "-fx-font-weight: 900;" +
-                            "-fx-text-fill: #2d3748;");
+                            "-fx-text-fill: #2d3748;"
+            );
             titleLabel.setWrapText(true);
 
             Label typeBadge = new Label(recompense.getTypeRecompense());
@@ -1127,7 +1075,8 @@ public class RecompenseController implements Initializable {
                             "-fx-padding: 8 20;" +
                             "-fx-font-size: 14px;" +
                             "-fx-font-weight: bold;" +
-                            "-fx-text-fill: #4a5568;");
+                            "-fx-text-fill: #4a5568;"
+            );
 
             titleBox.getChildren().addAll(titleLabel, typeBadge);
             headerBox.getChildren().addAll(iconContainer, titleBox);
@@ -1148,7 +1097,8 @@ public class RecompenseController implements Initializable {
                                 "-fx-font-weight: bold;" +
                                 "-fx-border-color: #9ae6b4;" +
                                 "-fx-border-radius: 20;" +
-                                "-fx-border-width: 1.5;");
+                                "-fx-border-width: 1.5;"
+                );
             } else {
                 statusLabel.setText("✗ INACTIF");
                 statusLabel.setStyle(
@@ -1160,7 +1110,8 @@ public class RecompenseController implements Initializable {
                                 "-fx-font-weight: bold;" +
                                 "-fx-border-color: #fc8181;" +
                                 "-fx-border-radius: 20;" +
-                                "-fx-border-width: 1.5;");
+                                "-fx-border-width: 1.5;"
+                );
             }
 
             HBox.setHgrow(titleBox, Priority.ALWAYS);
@@ -1172,7 +1123,8 @@ public class RecompenseController implements Initializable {
                     "-fx-background-color: linear-gradient(to right, #667eea, #764ba2, transparent);" +
                             "-fx-background-insets: 0;" +
                             "-fx-background-radius: 2;" +
-                            "-fx-pref-height: 3;");
+                            "-fx-pref-height: 3;"
+            );
 
             // ============= SECTION DESCRIPTION =============
             VBox descriptionSection = new VBox(12);
@@ -1182,7 +1134,8 @@ public class RecompenseController implements Initializable {
             descTitle.setStyle(
                     "-fx-font-size: 18px;" +
                             "-fx-font-weight: 700;" +
-                            "-fx-text-fill: #2d3748;");
+                            "-fx-text-fill: #2d3748;"
+            );
 
             Label descriptionContent = new Label(recompense.getDescription());
             descriptionContent.setWrapText(true);
@@ -1195,7 +1148,8 @@ public class RecompenseController implements Initializable {
                             "-fx-background-radius: 15;" +
                             "-fx-border-color: #e2e8f0;" +
                             "-fx-border-radius: 15;" +
-                            "-fx-border-width: 1;");
+                            "-fx-border-width: 1;"
+            );
             descriptionContent.setMaxWidth(580);
 
             descriptionSection.getChildren().addAll(descTitle, descriptionContent);
@@ -1207,7 +1161,8 @@ public class RecompenseController implements Initializable {
             conditionTitle.setStyle(
                     "-fx-font-size: 18px;" +
                             "-fx-font-weight: 700;" +
-                            "-fx-text-fill: #2d3748;");
+                            "-fx-text-fill: #2d3748;"
+            );
 
             Label conditionContent = new Label(recompense.getConditionObtention());
             conditionContent.setWrapText(true);
@@ -1220,7 +1175,8 @@ public class RecompenseController implements Initializable {
                             "-fx-background-radius: 15;" +
                             "-fx-border-color: #fbd38d;" +
                             "-fx-border-radius: 15;" +
-                            "-fx-border-width: 1;");
+                            "-fx-border-width: 1;"
+            );
             conditionContent.setMaxWidth(580);
 
             conditionSection.getChildren().addAll(conditionTitle, conditionContent);
@@ -1233,7 +1189,8 @@ public class RecompenseController implements Initializable {
                     "-fx-padding: 20 0;" +
                             "-fx-background-color: #edf2f7;" +
                             "-fx-background-radius: 20;" +
-                            "-fx-padding: 25;");
+                            "-fx-padding: 25;"
+            );
 
             // ID
             Label idLabel = new Label("🆔 ID");
@@ -1282,15 +1239,15 @@ public class RecompenseController implements Initializable {
             badgesBox.setAlignment(Pos.CENTER_LEFT);
             badgesBox.setStyle("-fx-padding: 15 0 0 0;");
 
-            Label categoryBadge = new Label(
-                    getIconForType(recompense.getTypeRecompense()) + " " + recompense.getTypeRecompense());
+            Label categoryBadge = new Label(getIconForType(recompense.getTypeRecompense()) + " " + recompense.getTypeRecompense());
             categoryBadge.setStyle(
                     "-fx-background-color: linear-gradient(to right, #667eea20, #764ba220);" +
                             "-fx-background-radius: 20;" +
                             "-fx-padding: 8 18;" +
                             "-fx-font-size: 13px;" +
                             "-fx-font-weight: 600;" +
-                            "-fx-text-fill: #667eea;");
+                            "-fx-text-fill: #667eea;"
+            );
 
             Label popularityBadge = new Label("🔥 Populaire");
             popularityBadge.setStyle(
@@ -1299,7 +1256,8 @@ public class RecompenseController implements Initializable {
                             "-fx-padding: 8 18;" +
                             "-fx-font-size: 13px;" +
                             "-fx-font-weight: 600;" +
-                            "-fx-text-fill: #975a16;");
+                            "-fx-text-fill: #975a16;"
+            );
 
             badgesBox.getChildren().addAll(categoryBadge, popularityBadge);
 
@@ -1312,7 +1270,8 @@ public class RecompenseController implements Initializable {
             footerLabel.setStyle(
                     "-fx-font-size: 12px;" +
                             "-fx-text-fill: #a0aec0;" +
-                            "-fx-font-style: italic;");
+                            "-fx-font-style: italic;"
+            );
             footerBox.getChildren().add(footerLabel);
 
             // ============= ASSEMBLAGE FINAL =============
@@ -1323,14 +1282,16 @@ public class RecompenseController implements Initializable {
                     conditionSection,
                     infoGrid,
                     badgesBox,
-                    footerBox);
+                    footerBox
+            );
 
             // ScrollPane pour le contenu
             ScrollPane scrollPane = new ScrollPane(card);
             scrollPane.setStyle(
                     "-fx-background-color: transparent;" +
                             "-fx-background: transparent;" +
-                            "-fx-border-color: transparent;");
+                            "-fx-border-color: transparent;"
+            );
             scrollPane.setFitToWidth(true);
             scrollPane.setFitToHeight(true);
 
@@ -1346,7 +1307,8 @@ public class RecompenseController implements Initializable {
                             "-fx-font-size: 14px;" +
                             "-fx-padding: 10 30;" +
                             "-fx-background-radius: 25;" +
-                            "-fx-cursor: hand;");
+                            "-fx-cursor: hand;"
+            );
 
             dialog.showAndWait();
 
@@ -1356,12 +1318,15 @@ public class RecompenseController implements Initializable {
         }
     }
 
+
+
     private void exportToPDF() {
         try {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Exporter les récompenses en PDF");
             fileChooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Fichiers PDF", "*.pdf"));
+                    new FileChooser.ExtensionFilter("Fichiers PDF", "*.pdf")
+            );
 
             fileChooser.setInitialFileName("recompenses_" +
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".pdf");
@@ -1486,10 +1451,9 @@ public class RecompenseController implements Initializable {
             contentStream.endText();
         }
     }
-
     private void drawStatCard(PDPageContentStream contentStream, float x, float y,
-            float width, float height, Color color,
-            String label, String value, String unit) throws Exception {
+                              float width, float height, Color color,
+                              String label, String value, String unit) throws Exception {
         // Fond de la carte
         contentStream.setNonStrokingColor(color);
         contentStream.addRect(x, y, width, height);
@@ -1569,8 +1533,7 @@ public class RecompenseController implements Initializable {
                     .collect(Collectors.groupingBy(Recompense::getTypeRecompense, Collectors.counting()));
 
             for (Map.Entry<String, Long> entry : typeStats.entrySet()) {
-                currentY = drawStatLine(contentStream, currentY, removeAccents(entry.getKey()),
-                        entry.getValue().toString());
+                currentY = drawStatLine(contentStream, currentY, removeAccents(entry.getKey()), entry.getValue().toString());
             }
 
             currentY -= 30;
@@ -1610,8 +1573,7 @@ public class RecompenseController implements Initializable {
         return y - 10;
     }
 
-    private float drawStatLine(PDPageContentStream contentStream, float y, String label, String value)
-            throws Exception {
+    private float drawStatLine(PDPageContentStream contentStream, float y, String label, String value) throws Exception {
         contentStream.beginText();
         contentStream.setNonStrokingColor(Color.BLACK);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
@@ -1674,18 +1636,20 @@ public class RecompenseController implements Initializable {
     }
 
     private float drawRecompenseCard(PDPageContentStream contentStream, Recompense recompense,
-            float y, float pageWidth) throws Exception {
+                                     float y, float pageWidth) throws Exception {
         float cardHeight = 200;
         float margin = 50;
         float cardWidth = pageWidth - 2 * margin;
 
-        Color cardColor = recompense.isActif() ? new Color(236, 240, 241) : new Color(250, 235, 235);
+        Color cardColor = recompense.isActif() ?
+                new Color(236, 240, 241) : new Color(250, 235, 235);
 
         contentStream.setNonStrokingColor(cardColor);
         contentStream.addRect(margin, y - cardHeight, cardWidth, cardHeight);
         contentStream.fill();
 
-        Color borderColor = recompense.isActif() ? new Color(46, 204, 113) : new Color(231, 76, 60);
+        Color borderColor = recompense.isActif() ?
+                new Color(46, 204, 113) : new Color(231, 76, 60);
 
         contentStream.setNonStrokingColor(borderColor);
         contentStream.addRect(margin, y - cardHeight, 10, cardHeight);
@@ -1773,11 +1737,11 @@ public class RecompenseController implements Initializable {
         return y - cardHeight;
     }
 
-    // Supprimer cette méthode car elle n'est plus utilisée
-    // private String getIconForTypePDF(String type) { ... }
+// Supprimer cette méthode car elle n'est plus utilisée
+// private String getIconForTypePDF(String type) { ... }
 
     private void drawInfoItem(PDPageContentStream contentStream, float x, float y,
-            String label, String value) throws Exception {
+                              String label, String value) throws Exception {
         contentStream.beginText();
         contentStream.setNonStrokingColor(new Color(127, 140, 141));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
@@ -1795,8 +1759,7 @@ public class RecompenseController implements Initializable {
 
     // Méthode utilitaire pour les icônes PDF
     private String getIconForTypePDF(String type) {
-        if (type == null)
-            return "🎁";
+        if (type == null) return "🎁";
 
         switch (type.toLowerCase()) {
             case "médaille":
@@ -1825,8 +1788,7 @@ public class RecompenseController implements Initializable {
 
     // Méthode utilitaire pour supprimer les accents
     private String removeAccents(String text) {
-        if (text == null)
-            return "";
+        if (text == null) return "";
 
         text = text.replace("\n", " ")
                 .replace("\r", " ");
@@ -1834,5 +1796,7 @@ public class RecompenseController implements Initializable {
         String normalized = Normalizer.normalize(text, Normalizer.Form.NFD);
         return normalized.replaceAll("\\p{InCombiningDiacriticalMarks}+", "");
     }
+
+
 
 }

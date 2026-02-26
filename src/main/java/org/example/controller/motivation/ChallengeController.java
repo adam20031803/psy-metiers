@@ -18,15 +18,27 @@ import javafx.scene.layout.HBox;
 import javafx.scene.layout.VBox;
 import javafx.stage.Modality;
 import javafx.stage.Stage;
-import org.example.dao.motivation.*;
+import org.example.util.Session;
+import org.example.dao.motivation.ChallengeCrud;
+import org.example.dao.motivation.ChallengeCoachCrud;
+import org.example.dao.motivation.CoachMotivationCrud;
+import org.example.dao.motivation.RecompenseCrud;
+import org.example.dao.motivation.CrudCoach;
+import org.example.dao.motivation.CollaborativeCrud;
+import org.example.dao.motivation.TaskCrud;
 import org.example.model.motivation.Challenge;
 import org.example.model.motivation.Recompense;
 import org.example.model.motivation.CoachMotivation;
-
+import org.example.model.motivation.Team;
+import org.example.model.motivation.TeamMember;
+import org.example.model.motivation.ChatMessage;
+import org.example.model.motivation.Task;
 import java.net.URL;
 import java.util.List;
 import java.util.ResourceBundle;
 import java.util.stream.Collectors;
+
+
 
 // Nouveaux imports pour l'export PDF professionnel
 import java.io.File;
@@ -41,25 +53,48 @@ import org.apache.pdfbox.pdmodel.PDPageContentStream;
 import org.apache.pdfbox.pdmodel.common.PDRectangle;
 import org.apache.pdfbox.pdmodel.font.PDType1Font;
 
+
 import org.apache.pdfbox.pdmodel.graphics.image.PDImageXObject;
-
 import javafx.scene.control.Tooltip;
-
+import javafx.animation.*;
+import javafx.util.Duration;
+import javafx.geometry.Pos;
+import javafx.scene.shape.*;
+import javafx.scene.paint.Color;
+import javafx.scene.Cursor;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.Priority;
-
-import java.awt.Color;
-import javafx.scene.layout.StackPane;
-
 import javafx.scene.Cursor;
 import javafx.scene.shape.Circle;
+import javafx.scene.layout.StackPane;
+import javafx.scene.paint.Color;
 import javafx.scene.layout.GridPane;
 import javafx.scene.layout.ColumnConstraints;
 import javafx.scene.control.ScrollPane;
 import javafx.scene.control.Separator;
-
 import javafx.geometry.Orientation;
 import javafx.scene.layout.FlowPane;
+import javafx.scene.control.ToggleGroup;
+import javafx.scene.control.RadioButton;
+import javafx.scene.control.Toggle;
+import java.util.ArrayList;
+import java.util.Comparator;
+import org.example.utils.EmailSender;
+
+// Ajoutez ces imports avec les autres imports JavaFX
+import javafx.animation.ScaleTransition;
+import javafx.animation.Animation;
+import javafx.util.Duration;
+
+// Ajoutez ces imports avec les autres imports JavaFX
+import javafx.scene.image.ImageView;
+import javafx.scene.image.Image;
+import javafx.scene.effect.DropShadow;
+import java.util.Optional;
+
+
+import javafx.scene.layout.BorderPane;
+
 
 public class ChallengeController implements Initializable {
 
@@ -84,6 +119,7 @@ public class ChallengeController implements Initializable {
     private TableColumn<Challenge, String> recompensesColumn;
     @FXML
     private TableColumn<Challenge, Void> actionsColumn;
+
 
     /* ================= FORM ================= */
     @FXML
@@ -124,78 +160,91 @@ public class ChallengeController implements Initializable {
     private Button dashboardBtn;
 
     @FXML
+    private Button homeBtn;
+
+
+    @FXML
     private Label totalLabel;
     @FXML
     private Label actifsLabel;
     @FXML
     private Label inactifsLabel;
 
+
+    @FXML private HBox sortBox;
+    @FXML private Label streakLabel;
+    private ToggleGroup sortToggleGroup;
+    private String currentSortType = "date_desc";
+
     /* ================= DATA ================= */
-    // flexible au modification
+    //flexible au modification
     private final ObservableList<Challenge> challengeList = FXCollections.observableArrayList();
     private final ChallengeCrud challengeCrud = new ChallengeCrud();
     private final CrudCoach.ChallengeRecompenseCrud challengeRecompenseCrud = new CrudCoach.ChallengeRecompenseCrud();
 
+
     private final ChallengeCoachCrud challengeCoachCrud = new ChallengeCoachCrud();
+    private final CollaborativeCrud collaborativeCrud = new CollaborativeCrud();
+    private final TaskCrud taskCrud = new TaskCrud();
 
     /* ================= INIT ================= */
 
-    // Méthode appelée automatiquement par JavaFX après le chargement du fichier
-    // FXML
+    //Méthode appelée automatiquement par JavaFX après le chargement du fichier FXML
     @Override
+
     public void initialize(URL location, ResourceBundle resources) {
         System.out.println("=== INITIALIZATION START ===");
+        System.out.println("totalLabel is null? " + (totalLabel == null));
+        System.out.println("actifsLabel is null? " + (actifsLabel == null));
+        System.out.println("inactifsLabel is null? " + (inactifsLabel == null));
 
         setupListView();
         setupForm();
         setupButtons();
         setupInputValidation();
-
-        // Check Role
-        checkRole();
-
-        // Ensure the ListView always observes the main list
-        challengeListView.setItems(challengeList);
-
-        // Load data once - this will also trigger updateStatistics()
+        setupSortControls(); // AJOUTER CETTE LIGNE
         loadData();
+        updateStatistics();
+        setupStreak();
+
+        loadDataWithoutStats();
 
         System.out.println("=== INITIALIZATION END ===");
     }
 
-    private void checkRole() {
-        if (!org.example.util.Session.isAdmin()) {
-            addBtn.setVisible(false);
-            updateBtn.setVisible(false);
-            deleteBtn.setVisible(false);
-            // coachBtn.setVisible(false); // Visible for Users now
-            // recBtn.setVisible(false); // Visible for Users now
-            exportBtn.setVisible(false);
+    private void setupStreak() {
+        if (streakLabel == null) return;
+        org.example.utils.SparksManager sparks = org.example.utils.SparksManager.getInstance();
+        streakLabel.setText(String.valueOf(sparks.getStreakCount()));
 
-            // Disable actions column if needed, or hide it
-            if (actionsColumn != null) {
-                actionsColumn.setVisible(false);
-            }
-
-            // Hide form fields if desired, or make them read-only
-            // For now, hiding buttons prevents actions.
-            // You might want to hide the whole form container if users shouldn't see it.
+        // Pulse animation for the flame
+        ScaleTransition pulse = new ScaleTransition(Duration.millis(800), streakLabel.getParent());
+        pulse.setFromX(1.0); pulse.setFromY(1.0);
+        pulse.setToX(1.05); pulse.setToY(1.05);
+        pulse.setCycleCount(Animation.INDEFINITE);
+        pulse.setAutoReverse(true);
+        pulse.play();
+    }
+    //charger les données des challenges dans l’interface graphique, sans calculer de statistiques.
+    private void loadDataWithoutStats() {
+        try {
+            //recuper readAll de challengeCrud et le met en challengelist
+            challengeList.setAll(challengeCrud.readAll());
+            //le listview recupere les donné de challengelist
+            challengeListView.setItems(challengeList);
+            System.out.println("Chargé " + challengeList.size() + " challenges");
+        } catch (Exception e) {
+            e.printStackTrace();
         }
     }
-
-    /*
-     * configure un ListView JavaFX pour afficher des Challenge
-     * sous forme de cartes personnalisées avec du style, des boutons et des
-     * interactions.
-     */
+    /*configure un ListView JavaFX pour afficher des Challenge
+     sous forme de cartes personnalisées avec du style, des boutons et des interactions.*/
     private void setupListView() {
-        // setCellFactory permet de personnaliser l’apparence et le comportement de
-        // chaque cellule dans le ListView
-        // on crée une classe anonyme qui hérite de ListCell<Challenge> pour définir le
-        // rendu des challenges.
+        //setCellFactory permet de personnaliser l’apparence et le comportement de chaque cellule dans le ListView
+        //on crée une classe anonyme qui hérite de ListCell<Challenge> pour définir le rendu des challenges.
         challengeListView.setCellFactory(param -> new ListCell<Challenge>() {
-            // Hbox:conteneur pour organiser les element horizentallement
-            // Vbox:conteneur pour organiser les element verticallement
+            //Hbox:conteneur pour organiser les element horizentallement
+            //Vbox:conteneur pour organiser les element verticallement
             private final HBox card = new HBox(15);
             private final VBox content = new VBox(8);
             private final HBox header = new HBox(10);
@@ -216,6 +265,9 @@ public class ChallengeController implements Initializable {
             private final Button coachesBtn = new Button("👨‍🏫");
             private final Button rewardsBtn = new Button("🎁");
             private final Button detailsBtn = new Button("👁️");
+            private final Button tasksBtn = new Button("🤖 Tasks");
+            private final Button qrCodeBtn = new Button("📱 QR");
+            private final Button teamBtn = new Button("🤝 Team");
 
             {
                 // Configuration initiale des composants
@@ -228,21 +280,20 @@ public class ChallengeController implements Initializable {
                         "-fx-border-radius: 12; " +
                         "-fx-border-width: 1; " +
                         "-fx-cursor: hand;");
-                // contenu aligné à gauche.
+                //contenu aligné à gauche.
                 card.setAlignment(Pos.CENTER_LEFT);
-                // la carte peut s’étendre pour remplir horizontalement.
+                //la carte peut s’étendre pour remplir horizontalement.
                 card.setMaxWidth(Double.MAX_VALUE);
 
                 // Configuration du header
                 header.setAlignment(Pos.CENTER_LEFT);
 
                 titleLabel.setStyle("-fx-font-size: 15px; -fx-font-weight: 900; -fx-text-fill: black;");
-                // evite le debordement(text retoure a la ligne)
+                //evite le debordement(text retoure a la ligne)
                 titleLabel.setWrapText(true);
                 titleLabel.setMaxWidth(250);
 
-                statusLabel.setStyle(
-                        "-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 3 8; -fx-background-radius: 10;");
+                statusLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-padding: 3 8; -fx-background-radius: 10;");
 
                 // Description
                 descLabel.setWrapText(true);
@@ -280,8 +331,52 @@ public class ChallengeController implements Initializable {
                         "-fx-font-size: 11px; -fx-cursor: hand;");
                 rewardsBtn.setTooltip(new Tooltip("Gérer les récompenses"));
 
+                tasksBtn.setStyle("-fx-background-color: linear-gradient(to right, #6366f1, #8b5cf6); " +
+                        "-fx-text-fill: white; -fx-font-weight: bold; " +
+                        "-fx-background-radius: 8; -fx-padding: 5 10; " +
+                        "-fx-font-size: 11px; -fx-cursor: hand; -fx-effect: dropshadow(gaussian, rgba(99,102,241,0.3), 5, 0, 0, 1);");
+                tasksBtn.setTooltip(new Tooltip("Générer et voir les tâches avec l'IA"));
+
+
+
+                qrCodeBtn.setStyle(
+                        "-fx-background-color: linear-gradient(to right, #9b59b6, #8e44ad); " +
+                                "-fx-text-fill: white; -fx-font-weight: bold; " +
+                                "-fx-background-radius: 8; -fx-padding: 5 10; " +
+                                "-fx-font-size: 11px; -fx-cursor: hand; " +
+                                "-fx-effect: dropshadow(gaussian, rgba(155,89,182,0.3), 5, 0, 0, 1);"
+                );
+                qrCodeBtn.setTooltip(new Tooltip("Générer le QR Code du challenge"));
+
+                // Effet au survol
+                qrCodeBtn.setOnMouseEntered(e ->
+                        qrCodeBtn.setStyle(
+                                "-fx-background-color: linear-gradient(to right, #8e44ad, #6c3483); " +
+                                        "-fx-text-fill: white; -fx-font-weight: bold; " +
+                                        "-fx-background-radius: 8; -fx-padding: 5 10; " +
+                                        "-fx-font-size: 11px; -fx-cursor: hand; " +
+                                        "-fx-effect: dropshadow(gaussian, rgba(142,68,173,0.5), 8, 0, 0, 2);"
+                        )
+                );
+
+                qrCodeBtn.setOnMouseExited(e ->
+                        qrCodeBtn.setStyle(
+                                "-fx-background-color: linear-gradient(to right, #9b59b6, #8e44ad); " +
+                                        "-fx-text-fill: white; -fx-font-weight: bold; " +
+                                        "-fx-background-radius: 8; -fx-padding: 5 10; " +
+                                        "-fx-font-size: 11px; -fx-cursor: hand;"
+                        )
+                );
+
+                teamBtn.setStyle("-fx-background-color: linear-gradient(to right, #f59e0b, #d97706); " +
+                        "-fx-text-fill: white; -fx-font-weight: bold; " +
+                        "-fx-background-radius: 8; -fx-padding: 5 10; " +
+                        "-fx-font-size: 11px; -fx-cursor: hand;");
+                teamBtn.setTooltip(new Tooltip("Espace Collaboratif : Équipe & Leaderboard"));
+
+
                 // ✅ AJOUT UNIQUE des boutons à actionBox
-                actionBox.getChildren().addAll(detailsBtn, coachesBtn, rewardsBtn);
+                actionBox.getChildren().addAll(qrCodeBtn,detailsBtn, coachesBtn, rewardsBtn, tasksBtn);
                 actionBox.setAlignment(Pos.CENTER_RIGHT);
 
                 // Labels pour coaches et récompenses
@@ -299,7 +394,7 @@ public class ChallengeController implements Initializable {
                 HBox mainContent = new HBox(15);
                 mainContent.setAlignment(Pos.CENTER_LEFT);
                 mainContent.getChildren().addAll(leftContent, rightColumn);
-                // Elle retourne la liste des nœuds enfants de ce conteneur
+                //Elle retourne la liste des nœuds enfants de ce conteneur
                 content.getChildren().addAll(mainContent, actionBox);
 
                 VBox mainCard = new VBox(10);
@@ -326,21 +421,27 @@ public class ChallengeController implements Initializable {
                 });
 
                 // Gestion des clics
+                // Dans setupListView(), remplacez la gestion des clics
                 card.setOnMouseClicked(e -> {
                     Challenge challenge = getItem();
                     if (challenge != null) {
-                        challengeListView.getSelectionModel().select(challenge);
-                        loadChallengeData(challenge);
+                        if (e.getClickCount() == 2) {
+                            // Double-clic : ouvrir le chatbot générateur de tâches
+                            openTaskGeneratorChatbot(challenge);
+                        } else {
+                            // Simple clic : sélection normale
+                            challengeListView.getSelectionModel().select(challenge);
+                            loadChallengeData(challenge);
+                        }
                     }
                 });
             }
 
-            // updateItem est appelée chaque fois qu’une cellule doit afficher un nouvel
-            // élément ou se vider.
+            //updateItem est appelée chaque fois qu’une cellule doit afficher un nouvel élément ou se vider.
 
             @Override
             protected void updateItem(Challenge challenge, boolean empty) {
-                // on appelle la méthode de la classe parente pour préparer la cellule.
+                //on appelle la méthode de la classe parente pour préparer la cellule.
                 super.updateItem(challenge, empty);
 
                 if (empty || challenge == null) {
@@ -381,24 +482,22 @@ public class ChallengeController implements Initializable {
 
                     // Mise à jour du header
                     header.getChildren().clear();
-                    // separateur entre titre et status(dans header)
+                    //separateur entre titre  et status(dans header)
                     Region spacer = new Region();
-                    // le spacer prend tout l’espace disponible entre les éléments.
+                    //le spacer prend tout l’espace disponible entre les éléments.
                     HBox.setHgrow(spacer, Priority.ALWAYS);
                     header.getChildren().addAll(titleLabel, spacer, statusLabel);
-                    // =>Résultat : dans la ligne du header, le titre reste à gauche, le statut à
-                    // droite, même si la largeur de la carte change.
+                    //=>Résultat : dans la ligne du header, le titre reste à gauche, le statut à droite, même si la largeur de la carte change.
 
                     // Coaches associés
-                    List<CoachMotivation> coaches = challengeCoachCrud
-                            .getCoachesForChallenge(challenge.getIdChallenge());
+                    List<CoachMotivation> coaches = challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge());
                     if (coaches.isEmpty()) {
                         coachesLabel.setText("👤 Aucun coach");
                         coachesLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.5); -fx-font-size: 11px;");
                         coachesLabel.setOnMouseClicked(null);
                     } else {
 
-                        // construire dynamiquement le texte du label.
+                        //construire dynamiquement le texte du label.
                         StringBuilder coachesText = new StringBuilder("👤 ");
                         for (int i = 0; i < Math.min(coaches.size(), 2); i++) {
                             coachesText.append(coaches.get(i).getNomCoach());
@@ -413,26 +512,22 @@ public class ChallengeController implements Initializable {
 
                         coachesLabel.setText(coachesText.toString());
                         coachesLabel.setStyle("-fx-text-fill: #2ECC71; -fx-font-size: 11px; -fx-font-weight: bold;");
-                        // cursor cliquable
+                        //cursor cliquable
                         coachesLabel.setCursor(Cursor.HAND);
 
                         coachesLabel.setOnMouseClicked(e -> {
-                            // empêche l’événement de remonter à la cellule entière
+                            //empêche l’événement de remonter à la cellule entière
                             e.consume();
-                            // ouvre un popup avec tous les coaches associés au challenge.
+                            //ouvre un popup avec tous les coaches associés au challenge.
                             showCoachesPopup(challenge, coaches);
                         });
                     }
 
                     // Récompenses associées
 
-                    /*
-                     * challengeRecompenseCrud.getRecompensesByChallenge(...) → méthode qui
-                     * interroge la base de données
-                     * pour récupérer toutes les récompenses liées à ce challenge.
-                     */
-                    List<Recompense> recompenses = challengeRecompenseCrud
-                            .getRecompensesByChallenge(challenge.getIdChallenge());
+                    /*challengeRecompenseCrud.getRecompensesByChallenge(...) → méthode qui interroge la base de données
+                     pour récupérer toutes les récompenses liées à ce challenge.*/
+                    List<Recompense> recompenses = challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge());
                     if (recompenses.isEmpty()) {
                         rewardsLabel.setText("🎁 Aucune récompense");
                         rewardsLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.5); -fx-font-size: 11px;");
@@ -479,8 +574,7 @@ public class ChallengeController implements Initializable {
                     Label coachIcon = new Label("👤");
                     Label coachCount = new Label(String.valueOf(coaches.size()));
                     coachCount.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: black;");
-                    coachBadge.setStyle(
-                            "-fx-background-color: rgba(52,152,219,0.2); -fx-background-radius: 10; -fx-padding: 3 8;");
+                    coachBadge.setStyle("-fx-background-color: rgba(52,152,219,0.2); -fx-background-radius: 10; -fx-padding: 3 8;");
                     coachBadge.getChildren().addAll(coachIcon, coachCount);
 
                     // Badge pour le nombre de récompenses
@@ -489,37 +583,55 @@ public class ChallengeController implements Initializable {
                     Label rewardIcon = new Label("🎁");
                     Label rewardCount = new Label(String.valueOf(recompenses.size()));
                     rewardCount.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: black;");
-                    rewardBadge.setStyle(
-                            "-fx-background-color: rgba(155,89,182,0.2); -fx-background-radius: 10; -fx-padding: 3 8;");
+                    rewardBadge.setStyle("-fx-background-color: rgba(155,89,182,0.2); -fx-background-radius: 10; -fx-padding: 3 8;");
                     rewardBadge.getChildren().addAll(rewardIcon, rewardCount);
 
-                    // La VBox statsBox contient maintenant :
+                    //La VBox statsBox contient maintenant :
                     //
-                    // ID du challenge (#12)
+                    //ID du challenge (#12)
                     //
-                    // Badge coaches 👤 + nombre
+                    //Badge coaches 👤 + nombre
                     //
-                    // Badge récompenses 🎁 + nombre
+                    //Badge récompenses 🎁 + nombre
                     statsBox.getChildren().addAll(idLabel, coachBadge, rewardBadge);
                     rightColumn.getChildren().add(statsBox);
 
                     // Mise à jour des actions des boutons
-                    // action declenché lors d un clic
+                    //action declenché lors d un clic
                     detailsBtn.setOnAction(e -> showChallengeDetail(challenge));
                     coachesBtn.setOnAction(e -> openCoachManager(challenge));
                     rewardsBtn.setOnAction(e -> openRecompenseManager(challenge));
+                    tasksBtn.setOnAction(e -> openTaskGeneratorChatbot(challenge));
 
-                    // card est un VBox ou HBox qui contient toute ta structure :
+
+                    qrCodeBtn.setOnAction(e -> {
+                        //Challenge challenge = getItem();
+                        if (challenge != null) {
+                            showQRCodeDialog(challenge);
+                        }
+                    });
+
+                    if ("Collaboratif".equals(challenge.getTypeChallenge())) {
+                        if (!actionBox.getChildren().contains(teamBtn)) {
+                            actionBox.getChildren().add(1, teamBtn);
+                        }
+                        teamBtn.setOnAction(e -> openCollaborativeWorkspace(challenge));
+                    } else {
+                        actionBox.getChildren().remove(teamBtn);
+                    }
+
+
+                    //card est un VBox ou HBox qui contient toute ta structure :
                     //
-                    // header
+                    //header
                     //
-                    // infoRow
+                    //infoRow
                     //
-                    // bottomRow
+                    //bottomRow
                     //
-                    // rightColumn
+                    //rightColumn
                     //
-                    // boutons
+                    //boutons
 
                     setGraphic(card);
                 }
@@ -527,16 +639,17 @@ public class ChallengeController implements Initializable {
         });
 
         // Sélection d'un élément
-        // newVal contient le challenge sélectionné
-        // oldval:selection precedant
-        // adlistner :s je clic fais quelque chose
+        //newVal contient le challenge sélectionné
+        //oldval:selection precedant
+        //adlistner :s je clic fais quelque chose
         challengeListView.getSelectionModel().selectedItemProperty().addListener(
                 (obs, oldVal, newVal) -> {
                     if (newVal != null) {
-                        // load les donné de l element selectionné
+                        //load les donné de l element selectionné
                         loadChallengeData(newVal);
                     }
-                });
+                }
+        );
 
         // Style de la ListView
         challengeListView.setStyle("-fx-background-color: transparent; " +
@@ -547,7 +660,7 @@ public class ChallengeController implements Initializable {
     /* ================= FORM ================= */
     private void setupForm() {
         difficulteField.getItems().addAll("Facile", "Moyen", "Difficile", "Expert");
-        typeField.getItems().addAll("Programmation", "Design", "Marketing", "Business", "Personnel");
+        typeField.getItems().addAll("Programmation", "Design", "Marketing", "Business", "Personnel", "Collaboratif");
 
         difficulteField.setValue("Moyen");
         typeField.setValue("Programmation");
@@ -565,15 +678,22 @@ public class ChallengeController implements Initializable {
         exportBtn.setOnAction(e -> exportToPDF());
 
         dashboardBtn.setOnAction(e -> goToDashboard());
-        // getSelectionModel:’est l’objet qui gère :Quel élément est sélectionné
-        // selectedItemProperty():L’élément actuellement sélectionné dans la ListView.
-        // addListener(...):Quand la sélection change → on exécute la lambda.
+        if (homeBtn != null) homeBtn.setOnAction(e -> onGoHome());
+
+         //getSelectionModel:’est l’objet qui gère :Quel élément est sélectionné
+        //selectedItemProperty():L’élément actuellement sélectionné dans la ListView.
+        //addListener(...):Quand la sélection change → on exécute la lambda.
 
         challengeListView.getSelectionModel().selectedItemProperty().addListener(
                 (obs, oldVal, newVal) -> {
-                    if (newVal != null)
-                        loadChallengeData(newVal);
-                });
+                    if (newVal != null) loadChallengeData(newVal);
+                }
+        );
+    }
+
+    private void onGoHome() {
+        Stage stage = (Stage) dashboardBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/Home.fxml", "Atomic You - Accueil");
     }
 
     // ==================== CONTRÔLE DE SAISIE ====================
@@ -666,16 +786,15 @@ public class ChallengeController implements Initializable {
 
     private void showFieldError(Control field, String message) {
         field.setStyle("-fx-border-color: red; -fx-border-width: 2px;");
-        // "Est-ce que le champ est un champ texte ?"
+        //"Est-ce que le champ est un champ texte ?"
         if (field instanceof TextInputControl) {
-            // On transforme le Control en TextInputControl
+            //On transforme le Control en TextInputControl
             ((TextInputControl) field).setTooltip(new Tooltip(message));
         } else if (field instanceof ComboBox) {
             field.setTooltip(new Tooltip(message));
         }
     }
-
-    // Supprimer l’affichage d’erreur d’un champ.
+    //Supprimer l’affichage d’erreur d’un champ.
     private void clearFieldError(Control field) {
         field.setStyle("");
         field.setTooltip(null);
@@ -698,8 +817,7 @@ public class ChallengeController implements Initializable {
             isValid = false;
         } else if (titre.matches("\\d+")) {
             showFieldError(titleField, "Le titre ne doit pas être composé uniquement de chiffres");
-            showAlert("Validation", "Le titre ne doit pas être composé uniquement de chiffres",
-                    Alert.AlertType.WARNING);
+            showAlert("Validation", "Le titre ne doit pas être composé uniquement de chiffres", Alert.AlertType.WARNING);
             titleField.requestFocus();
             isValid = false;
         } else if (!titre.matches(".*[a-zA-Z].*")) {
@@ -735,8 +853,7 @@ public class ChallengeController implements Initializable {
         } else if (description.matches("\\d+")) {
             showFieldError(descField, "La description ne doit pas être composée uniquement de chiffres");
             if (isValid) {
-                showAlert("Validation", "La description ne doit pas être composée uniquement de chiffres",
-                        Alert.AlertType.WARNING);
+                showAlert("Validation", "La description ne doit pas être composée uniquement de chiffres", Alert.AlertType.WARNING);
                 descField.requestFocus();
             }
             isValid = false;
@@ -801,8 +918,7 @@ public class ChallengeController implements Initializable {
         if (difficulteField.getValue() == null || difficulteField.getValue().isEmpty()) {
             showFieldError(difficulteField, "La difficulté est obligatoire");
             showAlert("Validation", "La difficulté est obligatoire", Alert.AlertType.WARNING);
-            if (isValid)
-                difficulteField.requestFocus();
+            if (isValid) difficulteField.requestFocus();
             isValid = false;
         } else {
             clearFieldError(difficulteField);
@@ -811,8 +927,7 @@ public class ChallengeController implements Initializable {
         if (typeField.getValue() == null || typeField.getValue().isEmpty()) {
             showFieldError(typeField, "Le type est obligatoire");
             showAlert("Validation", "Le type est obligatoire", Alert.AlertType.WARNING);
-            if (isValid)
-                typeField.requestFocus();
+            if (isValid) typeField.requestFocus();
             isValid = false;
         } else {
             clearFieldError(typeField);
@@ -824,11 +939,9 @@ public class ChallengeController implements Initializable {
     /* ================= DATA ================= */
     private void loadData() {
         try {
-            // Mettre à jour la liste principale (challengeList est un membre de la classe)
-            challengeList.setAll(challengeCrud.readAll());
-            System.out.println("Chargé " + challengeList.size() + " challenges");
-
-            // Calculer les statistiques après le chargement
+            List<Challenge> challenges = challengeCrud.readAll();
+            ObservableList<Challenge> observableList = FXCollections.observableArrayList(challenges);
+            challengeListView.setItems(observableList);
             updateStatistics();
         } catch (Exception e) {
             e.printStackTrace();
@@ -837,31 +950,30 @@ public class ChallengeController implements Initializable {
 
     private void searchChallenges() {
         String keyword = searchField.getText().toLowerCase().trim();
+
+        List<Challenge> filtered;
+
         if (keyword.isEmpty()) {
-            loadData();
-            return;
+            filtered = challengeCrud.readAll();
+        } else {
+            filtered = challengeCrud.readAll().stream()
+                    .filter(c ->
+                            c.getTitre().toLowerCase().contains(keyword) ||
+                                    c.getDescription().toLowerCase().contains(keyword) ||
+                                    c.getTypeChallenge().toLowerCase().contains(keyword) ||
+                                    c.getNiveauDifficulte().toLowerCase().contains(keyword)
+                    )
+                    .collect(Collectors.toList());
         }
 
-        List<Challenge> filtered = challengeCrud.readAll().stream()
-                .filter(c -> c.getTitre().toLowerCase().contains(keyword) ||
-                        c.getDescription().toLowerCase().contains(keyword) ||
-                        c.getTypeChallenge().toLowerCase().contains(keyword) ||
-                        c.getNiveauDifficulte().toLowerCase().contains(keyword))
-                .collect(Collectors.toList());
-
-        // Pour la recherche, on peut temporairement changer la source du ListView
-        // Mais attention : challengeList reste l'état complet pour les stats?
-        // Habituellement, les stats sur le tableau de bord reflètent la base complète,
-        // ou la vue filtrée? Dans Gestion, c'est souvent la base.
-        challengeListView.setItems(FXCollections.observableArrayList(filtered));
-        // On ne met pas à jour les stats ici si on veut qu'elles gardent le total
-        // global
+        // Appliquer le tri actuel sur les résultats filtrés
+        challengeList.setAll(filtered);
+        sortChallenges(currentSortType); // Réappliquer le tri
     }
 
     /* ================= CRUD ================= */
     private void addChallenge() {
-        if (!validateForm())
-            return;
+        if (!validateForm()) return;
 
         try {
             Challenge challenge = new Challenge(
@@ -869,7 +981,8 @@ public class ChallengeController implements Initializable {
                     descField.getText().trim(),
                     Integer.parseInt(dureeField.getText().trim()),
                     difficulteField.getValue(),
-                    typeField.getValue());
+                    typeField.getValue()
+            );
 
             challenge.setActif(actifField.isSelected());
             challengeCrud.create(challenge);
@@ -891,8 +1004,7 @@ public class ChallengeController implements Initializable {
             return;
         }
 
-        if (!validateForm())
-            return;
+        if (!validateForm()) return;
 
         try {
             selected.setTitre(titleField.getText().trim());
@@ -958,8 +1070,10 @@ public class ChallengeController implements Initializable {
 
             // Liste des récompenses actuelles
             ListView<Recompense> currentList = new ListView<>();
-            ObservableList<Recompense> currentRecompenses = FXCollections.observableArrayList(
-                    challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge()));
+            ObservableList<Recompense> currentRecompenses =
+                    FXCollections.observableArrayList(
+                            challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge())
+                    );
             currentList.setItems(currentRecompenses);
             currentList.setCellFactory(list -> new ListCell<>() {
                 @Override
@@ -976,7 +1090,8 @@ public class ChallengeController implements Initializable {
             VBox currentBox = new VBox(10);
             currentBox.getChildren().addAll(
                     new Label("✅ Récompenses assignées (" + currentRecompenses.size() + ") :"),
-                    currentList);
+                    currentList
+            );
 
             // Bouton pour ajouter une nouvelle récompense
             Button addNewButton = new Button("➕ Ajouter une récompense");
@@ -984,7 +1099,8 @@ public class ChallengeController implements Initializable {
                     "-fx-background-color: #2ECC71; " +
                             "-fx-text-fill: white; " +
                             "-fx-font-weight: bold; " +
-                            "-fx-padding: 10 20;");
+                            "-fx-padding: 10 20;"
+            );
             addNewButton.setOnAction(e -> {
                 openRecompenseSelector(challenge, currentRecompenses);
             });
@@ -1010,7 +1126,8 @@ public class ChallengeController implements Initializable {
                     titleLabel,
                     currentBox,
                     addNewButton,
-                    buttonBox);
+                    buttonBox
+            );
 
             Scene scene = new Scene(root, 500, 400);
             stage.setScene(scene);
@@ -1067,7 +1184,8 @@ public class ChallengeController implements Initializable {
                 if (selected != null) {
                     challengeRecompenseCrud.associateRecompense(
                             challenge.getIdChallenge(),
-                            selected.getIdRecompense());
+                            selected.getIdRecompense()
+                    );
                     currentList.add(selected);
                     stage.close();
                 }
@@ -1131,63 +1249,23 @@ public class ChallengeController implements Initializable {
         alert.showAndWait();
     }
 
+
     /* ================= NAVIGATION VERS DASHBOARD ================= */
     private void goToDashboard() {
-        try {
-            // Charger le fichier FXML du dashboard
-            FXMLLoader loader = new FXMLLoader(
-                    getClass().getResource("/org/example/ui/motivation/dashboard_statistiques.fxml"));
-            Parent root = loader.load();
-
-            // Obtenir la scène actuelle
-            Stage stage = (Stage) dashboardBtn.getScene().getWindow();
-
-            // Créer la nouvelle scène
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
-            stage.setTitle("📊 Dashboard Statistiques - Challenge Manager Pro");
-            stage.centerOnScreen();
-
-            // Animation de transition (optionnelle)
-            stage.setOpacity(0);
-            javafx.animation.FadeTransition fade = new javafx.animation.FadeTransition(
-                    javafx.util.Duration.millis(300), stage.getScene().getRoot());
-            fade.setFromValue(0);
-            fade.setToValue(1);
-            fade.play();
-            stage.setOpacity(1);
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible d'ouvrir le dashboard: " + e.getMessage(), Alert.AlertType.ERROR);
-        }
+        Stage stage = (Stage) dashboardBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/dashboard_statistiques.fxml", "📊 Dashboard Statistiques");
     }
 
     private void goToCoaches() {
-        try {
-            Parent root = FXMLLoader.load(getClass().getResource("/org/example/ui/motivation/coach.fxml"));
-            Stage stage = (Stage) coachBtn.getScene().getWindow();
-            stage.setScene(new Scene(root));
-            stage.show();
-        } catch (Exception e) {
-            e.printStackTrace();
-        }
+        Stage stage = (Stage) coachBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/coach.fxml", "👨‍🏫 Gestion Coaches");
     }
 
     private void goToRecompenses() {
-        try {
-            FXMLLoader loader = new FXMLLoader(
-                    getClass().getResource("/org/example/ui/motivation/RecompenseView.fxml"));
-            Parent root = loader.load();
-            Stage stage = (Stage) recBtn.getScene().getWindow();
-            stage.setScene(new Scene(root));
-            stage.setTitle("🏆 Gestion des Récompenses");
-            stage.centerOnScreen();
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible d'ouvrir la gestion des récompenses", Alert.AlertType.ERROR);
-        }
+        Stage stage = (Stage) recBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/RecompenseView.fxml", "🏆 Gestion des Récompenses");
     }
+
 
     /* ================= EXPORT PDF ================= */
     /* ================= EXPORT SIMPLE (SANS PDFBOX) ================= */
@@ -1198,7 +1276,8 @@ public class ChallengeController implements Initializable {
             FileChooser fileChooser = new FileChooser();
             fileChooser.setTitle("Exporter les challenges en PDF");
             fileChooser.getExtensionFilters().add(
-                    new FileChooser.ExtensionFilter("Fichiers PDF", "*.pdf"));
+                    new FileChooser.ExtensionFilter("Fichiers PDF", "*.pdf")
+            );
 
             fileChooser.setInitialFileName("challenges_" +
                     LocalDateTime.now().format(DateTimeFormatter.ofPattern("yyyy-MM-dd")) + ".pdf");
@@ -1254,13 +1333,13 @@ public class ChallengeController implements Initializable {
             float pageHeight = page.getMediaBox().getHeight();
 
             // Fond coloré en haut
-            contentStream.setNonStrokingColor(new Color(41, 128, 185)); // Bleu professionnel
+            contentStream.setNonStrokingColor(new java.awt.Color(41, 128, 185)); // Bleu professionnel
             contentStream.addRect(0, pageHeight - 200, pageWidth, 200);
             contentStream.fill();
 
             // Titre principal - CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(Color.WHITE);
+            contentStream.setNonStrokingColor(java.awt.Color.WHITE);
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 36);
             contentStream.newLineAtOffset(50, pageHeight - 100);
             contentStream.showText("RAPPORT DES CHALLENGES");
@@ -1268,7 +1347,7 @@ public class ChallengeController implements Initializable {
 
             // Sous-titre - CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(Color.WHITE);
+            contentStream.setNonStrokingColor(java.awt.Color.WHITE);
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 16);
             contentStream.newLineAtOffset(50, pageHeight - 140);
             contentStream.showText("Analyse complete et statistiques");
@@ -1276,7 +1355,7 @@ public class ChallengeController implements Initializable {
 
             // Date de génération - CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(Color.BLACK);
+            contentStream.setNonStrokingColor(java.awt.Color.BLACK);
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
             contentStream.newLineAtOffset(50, pageHeight - 250);
             contentStream.showText("Date de generation: " +
@@ -1294,21 +1373,21 @@ public class ChallengeController implements Initializable {
 
             // Carte 1: Total
             drawStatCard(contentStream, 50, cardY, cardWidth, cardHeight,
-                    new Color(52, 152, 219), "TOTAL",
+                    new java.awt.Color(52, 152, 219), "TOTAL",
                     String.valueOf(challengeList.size()), "Challenges");
 
             // Carte 2: Actifs
             drawStatCard(contentStream, 50 + cardWidth + spacing, cardY, cardWidth, cardHeight,
-                    new Color(46, 204, 113), "ACTIFS",
+                    new java.awt.Color(46, 204, 113), "ACTIFS",
                     String.valueOf(actifs), "Challenges");
 
             // Carte 3: Inactifs
             drawStatCard(contentStream, 50 + 2 * (cardWidth + spacing), cardY, cardWidth, cardHeight,
-                    new Color(231, 76, 60), "INACTIFS",
+                    new java.awt.Color(231, 76, 60), "INACTIFS",
                     String.valueOf(inactifs), "Challenges");
 
             // Pied de page avec ligne décorative
-            contentStream.setStrokingColor(new Color(41, 128, 185));
+            contentStream.setStrokingColor(new java.awt.Color(41, 128, 185));
             contentStream.setLineWidth(3);
             contentStream.moveTo(50, 100);
             contentStream.lineTo(pageWidth - 50, 100);
@@ -1316,18 +1395,17 @@ public class ChallengeController implements Initializable {
 
             // Texte du pied de page - CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(new Color(127, 140, 141));
+            contentStream.setNonStrokingColor(new java.awt.Color(127, 140, 141));
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_OBLIQUE), 10);
             contentStream.newLineAtOffset(50, 70);
             contentStream.showText("Genere automatiquement par le systeme de gestion des challenges");
             contentStream.endText();
 
-            // image logo
 
-            String imageLeftPath = getClass().getResource("/org/example/image/logo_equipe-removebg-preview (1).png")
-                    .toURI().getPath();
-            String imageRightPath = getClass().getResource("/org/example/image/Logo_ESPRIT_-_Tunisie.png").toURI()
-                    .getPath();
+            //image logo
+
+            String imageLeftPath = getClass().getResource("/org/example/image/logo_equipe-removebg-preview (1).png").toURI().getPath();
+            String imageRightPath = getClass().getResource("/org/example/image/Logo_ESPRIT_-_Tunisie.png").toURI().getPath();
 
             PDImageXObject imageLeft = PDImageXObject.createFromFile(imageLeftPath, document);
             PDImageXObject imageRight = PDImageXObject.createFromFile(imageRightPath, document);
@@ -1339,6 +1417,7 @@ public class ChallengeController implements Initializable {
 
             // Récupération de la largeur de la page
 
+
             // Dessiner l'image gauche (en bas à gauche)
             contentStream.drawImage(imageLeft, margin, 20, imageWidth, imageHeight);
 
@@ -1348,8 +1427,8 @@ public class ChallengeController implements Initializable {
     }
 
     private void drawStatCard(PDPageContentStream contentStream, float x, float y,
-            float width, float height, Color color,
-            String label, String value, String unit) throws Exception {
+                              float width, float height, java.awt.Color color,
+                              String label, String value, String unit) throws Exception {
         // Fond de la carte
         contentStream.setNonStrokingColor(color);
         contentStream.addRect(x, y, width, height);
@@ -1357,7 +1436,7 @@ public class ChallengeController implements Initializable {
 
         // Label - CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(Color.WHITE);
+        contentStream.setNonStrokingColor(java.awt.Color.WHITE);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 12);
         contentStream.newLineAtOffset(x + 10, y + height - 25);
         contentStream.showText(label);
@@ -1365,7 +1444,7 @@ public class ChallengeController implements Initializable {
 
         // Valeur (grand) - CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(Color.WHITE);
+        contentStream.setNonStrokingColor(java.awt.Color.WHITE);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 32);
         contentStream.newLineAtOffset(x + 10, y + height - 65);
         contentStream.showText(value);
@@ -1373,7 +1452,7 @@ public class ChallengeController implements Initializable {
 
         // Unité - CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(Color.WHITE);
+        contentStream.setNonStrokingColor(java.awt.Color.WHITE);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 11);
         contentStream.newLineAtOffset(x + 10, y + 15);
         contentStream.showText(unit);
@@ -1389,13 +1468,13 @@ public class ChallengeController implements Initializable {
             float pageHeight = page.getMediaBox().getHeight();
 
             // En-tête de la page
-            contentStream.setNonStrokingColor(new Color(41, 128, 185));
+            contentStream.setNonStrokingColor(new java.awt.Color(41, 128, 185));
             contentStream.addRect(0, pageHeight - 80, pageWidth, 80);
             contentStream.fill();
 
             // CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(Color.WHITE);
+            contentStream.setNonStrokingColor(java.awt.Color.WHITE);
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 24);
             contentStream.newLineAtOffset(50, pageHeight - 50);
             contentStream.showText("STATISTIQUES DETAILLEES");
@@ -1457,7 +1536,7 @@ public class ChallengeController implements Initializable {
 
             // Numéro de page - CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(new Color(127, 140, 141));
+            contentStream.setNonStrokingColor(new java.awt.Color(127, 140, 141));
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
             contentStream.newLineAtOffset(pageWidth - 80, 30);
             contentStream.showText("Page 2");
@@ -1467,7 +1546,7 @@ public class ChallengeController implements Initializable {
 
     private float drawSectionTitle(PDPageContentStream contentStream, float y, String title) throws Exception {
         // CORRIGÉ
-        contentStream.setNonStrokingColor(new Color(52, 73, 94));
+        contentStream.setNonStrokingColor(new java.awt.Color(52, 73, 94));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 16);
         contentStream.beginText();
         contentStream.newLineAtOffset(50, y);
@@ -1475,7 +1554,7 @@ public class ChallengeController implements Initializable {
         contentStream.endText();
 
         // Ligne sous le titre
-        contentStream.setStrokingColor(new Color(41, 128, 185));
+        contentStream.setStrokingColor(new java.awt.Color(41, 128, 185));
         contentStream.setLineWidth(2);
         contentStream.moveTo(50, y - 5);
         contentStream.lineTo(300, y - 5);
@@ -1484,11 +1563,10 @@ public class ChallengeController implements Initializable {
         return y - 10;
     }
 
-    private float drawStatLine(PDPageContentStream contentStream, float y, String label, String value)
-            throws Exception {
+    private float drawStatLine(PDPageContentStream contentStream, float y, String label, String value) throws Exception {
         // CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(Color.BLACK);
+        contentStream.setNonStrokingColor(java.awt.Color.BLACK);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 12);
         contentStream.newLineAtOffset(70, y);
         contentStream.showText(label);
@@ -1496,7 +1574,7 @@ public class ChallengeController implements Initializable {
 
         // CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(new Color(41, 128, 185));
+        contentStream.setNonStrokingColor(new java.awt.Color(41, 128, 185));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 12);
         contentStream.newLineAtOffset(300, y);
         contentStream.showText(value);
@@ -1518,13 +1596,13 @@ public class ChallengeController implements Initializable {
                 float pageHeight = page.getMediaBox().getHeight();
 
                 // En-tête de la page
-                contentStream.setNonStrokingColor(new Color(41, 128, 185));
+                contentStream.setNonStrokingColor(new java.awt.Color(41, 128, 185));
                 contentStream.addRect(0, pageHeight - 60, pageWidth, 60);
                 contentStream.fill();
 
                 // CORRIGÉ
                 contentStream.beginText();
-                contentStream.setNonStrokingColor(Color.WHITE);
+                contentStream.setNonStrokingColor(java.awt.Color.WHITE);
                 contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 20);
                 contentStream.newLineAtOffset(50, pageHeight - 40);
                 contentStream.showText("DETAIL DES CHALLENGES");
@@ -1541,7 +1619,7 @@ public class ChallengeController implements Initializable {
 
                 // Numéro de page - CORRIGÉ
                 contentStream.beginText();
-                contentStream.setNonStrokingColor(new Color(127, 140, 141));
+                contentStream.setNonStrokingColor(new java.awt.Color(127, 140, 141));
                 contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
                 contentStream.newLineAtOffset(pageWidth - 80, 30);
                 contentStream.showText("Page " + pageNumber);
@@ -1552,20 +1630,22 @@ public class ChallengeController implements Initializable {
     }
 
     private float drawChallengeCard(PDPageContentStream contentStream, Challenge challenge,
-            float y, float pageWidth) throws Exception {
+                                    float y, float pageWidth) throws Exception {
         float cardHeight = 180;
         float margin = 50;
         float cardWidth = pageWidth - 2 * margin;
 
         // Fond de la carte avec couleur selon le statut
-        Color cardColor = challenge.isActif() ? new Color(236, 240, 241) : new Color(250, 235, 235);
+        java.awt.Color cardColor = challenge.isActif() ?
+                new java.awt.Color(236, 240, 241) : new java.awt.Color(250, 235, 235);
 
         contentStream.setNonStrokingColor(cardColor);
         contentStream.addRect(margin, y - cardHeight, cardWidth, cardHeight);
         contentStream.fill();
 
         // Bordure colorée à gauche
-        Color borderColor = challenge.isActif() ? new Color(46, 204, 113) : new Color(231, 76, 60);
+        java.awt.Color borderColor = challenge.isActif() ?
+                new java.awt.Color(46, 204, 113) : new java.awt.Color(231, 76, 60);
 
         contentStream.setNonStrokingColor(borderColor);
         contentStream.addRect(margin, y - cardHeight, 10, cardHeight);
@@ -1576,7 +1656,7 @@ public class ChallengeController implements Initializable {
 
         // Titre du challenge (en gras) - CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(new Color(44, 62, 80));
+        contentStream.setNonStrokingColor(new java.awt.Color(44, 62, 80));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 14);
         contentStream.newLineAtOffset(textX, textY);
         String titre = challenge.getTitre();
@@ -1590,7 +1670,7 @@ public class ChallengeController implements Initializable {
 
         // Description - CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(new Color(52, 73, 94));
+        contentStream.setNonStrokingColor(new java.awt.Color(52, 73, 94));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 11);
         contentStream.newLineAtOffset(textX, textY);
         String desc = challenge.getDescription();
@@ -1626,7 +1706,7 @@ public class ChallengeController implements Initializable {
         contentStream.fill();
 
         contentStream.beginText();
-        contentStream.setNonStrokingColor(Color.WHITE);
+        contentStream.setNonStrokingColor(java.awt.Color.WHITE);
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 10);
         contentStream.newLineAtOffset(badgeX + 10, badgeY + 8);
         contentStream.showText(challenge.isActif() ? "ACTIF" : "INACTIF");
@@ -1640,7 +1720,7 @@ public class ChallengeController implements Initializable {
             textY -= 50;
             // CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(new Color(230, 126, 34));
+            contentStream.setNonStrokingColor(new java.awt.Color(230, 126, 34));
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 9);
             contentStream.newLineAtOffset(textX, textY);
             contentStream.showText("Recompenses: ");
@@ -1657,7 +1737,7 @@ public class ChallengeController implements Initializable {
 
             // CORRIGÉ
             contentStream.beginText();
-            contentStream.setNonStrokingColor(new Color(127, 140, 141));
+            contentStream.setNonStrokingColor(new java.awt.Color(127, 140, 141));
             contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 9);
             contentStream.newLineAtOffset(textX + 75, textY);
             contentStream.showText(recompensesText);
@@ -1668,10 +1748,10 @@ public class ChallengeController implements Initializable {
     }
 
     private void drawInfoItem(PDPageContentStream contentStream, float x, float y,
-            String label, String value) throws Exception {
+                              String label, String value) throws Exception {
         // CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(new Color(127, 140, 141));
+        contentStream.setNonStrokingColor(new java.awt.Color(127, 140, 141));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 10);
         contentStream.newLineAtOffset(x, y);
         contentStream.showText(label);
@@ -1679,12 +1759,13 @@ public class ChallengeController implements Initializable {
 
         // CORRIGÉ
         contentStream.beginText();
-        contentStream.setNonStrokingColor(new Color(52, 73, 94));
+        contentStream.setNonStrokingColor(new java.awt.Color(52, 73, 94));
         contentStream.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA_BOLD), 10);
         contentStream.newLineAtOffset(x + 60, y);
         contentStream.showText(value);
         contentStream.endText();
     }
+
 
     /* ================= MISE À JOUR DES STATISTIQUES ================= */
     /* ================= MISE À JOUR DES STATISTIQUES ================= */
@@ -1696,13 +1777,11 @@ public class ChallengeController implements Initializable {
             }
             if (actifsLabel != null) {
                 actifsLabel.setText("0");
-                actifsLabel.setStyle("-fx-font-size: 36px; -fx-font-weight: 900; -fx-text-fill: #00FF88;"); // Vert vif
-                                                                                                            // néon
+                actifsLabel.setStyle("-fx-font-size: 36px; -fx-font-weight: 900; -fx-text-fill: #00FF88;"); // Vert vif néon
             }
             if (inactifsLabel != null) {
                 inactifsLabel.setText("0");
-                inactifsLabel.setStyle("-fx-font-size: 36px; -fx-font-weight: 900; -fx-text-fill: #FF6B6B;"); // Rouge
-                                                                                                              // vif
+                inactifsLabel.setStyle("-fx-font-size: 36px; -fx-font-weight: 900; -fx-text-fill: #FF6B6B;"); // Rouge vif
             }
             return;
         }
@@ -1727,12 +1806,9 @@ public class ChallengeController implements Initializable {
         }
 
         // Optionnel: animation
-        if (totalLabel != null)
-            animateLabel(totalLabel);
-        if (actifsLabel != null)
-            animateLabel(actifsLabel);
-        if (inactifsLabel != null)
-            animateLabel(inactifsLabel);
+        if (totalLabel != null) animateLabel(totalLabel);
+        if (actifsLabel != null) animateLabel(actifsLabel);
+        if (inactifsLabel != null) animateLabel(inactifsLabel);
     }
 
     /* ================= ANIMATION DES LABELS ================= */
@@ -1748,6 +1824,7 @@ public class ChallengeController implements Initializable {
         scaleTransition.setToY(1.0);
         scaleTransition.play();
     }
+
 
     /* ================= GESTION DES COACHES ================= */
     private void openCoachManager(Challenge challenge) {
@@ -1766,8 +1843,10 @@ public class ChallengeController implements Initializable {
 
             // Liste des coaches actuels
             ListView<CoachMotivation> currentList = new ListView<>();
-            ObservableList<CoachMotivation> currentCoaches = FXCollections.observableArrayList(
-                    challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge()));
+            ObservableList<CoachMotivation> currentCoaches =
+                    FXCollections.observableArrayList(
+                            challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge())
+                    );
             currentList.setItems(currentCoaches);
             currentList.setCellFactory(list -> new ListCell<CoachMotivation>() {
                 @Override
@@ -1790,10 +1869,12 @@ public class ChallengeController implements Initializable {
                                 "-fx-background-color: #E74C3C; " +
                                         "-fx-text-fill: white; " +
                                         "-fx-font-weight: bold; " +
-                                        "-fx-padding: 2 5;");
+                                        "-fx-padding: 2 5;"
+                        );
                         removeButton.setOnAction(e -> {
                             boolean success = challengeCoachCrud.dissociateCoachFromChallenge(
-                                    challenge.getIdChallenge(), coach.getIdCoach());
+                                    challenge.getIdChallenge(), coach.getIdCoach()
+                            );
                             if (success) {
                                 currentCoaches.remove(coach);
                                 showAlert("Succès", "Coach retiré avec succès", Alert.AlertType.INFORMATION);
@@ -1811,7 +1892,8 @@ public class ChallengeController implements Initializable {
             VBox currentBox = new VBox(10);
             currentBox.getChildren().addAll(
                     new Label("✅ Coaches assignés (" + currentCoaches.size() + ") :"),
-                    currentList);
+                    currentList
+            );
 
             // Bouton pour ajouter un nouveau coach
             Button addNewButton = new Button("➕ Ajouter un coach");
@@ -1819,7 +1901,8 @@ public class ChallengeController implements Initializable {
                     "-fx-background-color: #2ECC71; " +
                             "-fx-text-fill: white; " +
                             "-fx-font-weight: bold; " +
-                            "-fx-padding: 10 20;");
+                            "-fx-padding: 10 20;"
+            );
             addNewButton.setOnAction(e -> {
                 openCoachSelector(challenge, currentCoaches);
             });
@@ -1845,7 +1928,8 @@ public class ChallengeController implements Initializable {
                     titleLabel,
                     currentBox,
                     addNewButton,
-                    buttonBox);
+                    buttonBox
+            );
 
             Scene scene = new Scene(root, 600, 500);
             stage.setScene(scene);
@@ -1898,7 +1982,8 @@ public class ChallengeController implements Initializable {
                         styleLabel.setStyle("-fx-text-fill: #7F8C8D;");
 
                         Label statusLabel = new Label(coach.isActif() ? "✅" : "❌");
-                        statusLabel.setStyle(coach.isActif() ? "-fx-text-fill: green;" : "-fx-text-fill: red;");
+                        statusLabel.setStyle(coach.isActif() ?
+                                "-fx-text-fill: green;" : "-fx-text-fill: red;");
 
                         hbox.getChildren().addAll(nameLabel, styleLabel, statusLabel);
                         setGraphic(hbox);
@@ -1915,7 +2000,8 @@ public class ChallengeController implements Initializable {
                 if (selected != null) {
                     boolean success = challengeCoachCrud.associateCoachToChallenge(
                             challenge.getIdChallenge(),
-                            selected.getIdCoach());
+                            selected.getIdCoach()
+                    );
                     if (success) {
                         currentList.add(selected);
                         stage.close();
@@ -1966,8 +2052,7 @@ public class ChallengeController implements Initializable {
                     } else {
                         HBox hbox = new HBox(10);
                         hbox.setAlignment(Pos.CENTER_LEFT);
-                        hbox.setStyle(
-                                "-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 5;");
+                        hbox.setStyle("-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 5;");
 
                         // Avatar/icône
                         Label icon = new Label("👤");
@@ -1975,28 +2060,78 @@ public class ChallengeController implements Initializable {
 
                         VBox infoBox = new VBox(5);
                         Label nameLabel = new Label(coach.getNomCoach());
-                        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: white; -fx-font-size: 14px;");
+                        nameLabel.setStyle("-fx-font-weight: bold; -fx-text-fill: #000000; -fx-font-size: 14px;");
+
+                        // === AJOUT DE L'EMAIL DANS L'INFOBULLE ===
+                        String email = coach.getEmail();
+                        if (email != null && !email.isEmpty() && !email.equals("null")) {
+                            nameLabel.setTooltip(new Tooltip("Email: " + email));
+                        } else {
+                            nameLabel.setTooltip(new Tooltip("Email non renseigné"));
+                        }
 
                         Label styleLabel = new Label("Style: " + coach.getStyle());
                         styleLabel.setStyle("-fx-text-fill: #BDC3C7; -fx-font-size: 12px;");
 
                         // Statut avec badge coloré
                         Label statusLabel = new Label(coach.isActif() ? "✅ ACTIF" : "❌ INACTIF");
-                        statusLabel.setStyle(
-                                coach.isActif() ? "-fx-text-fill: #2ECC71; -fx-font-size: 11px; -fx-font-weight: bold;"
-                                        : "-fx-text-fill: #E74C3C; -fx-font-size: 11px; -fx-font-weight: bold;");
+                        statusLabel.setStyle(coach.isActif() ?
+                                "-fx-text-fill: #2ECC71; -fx-font-size: 11px; -fx-font-weight: bold;" :
+                                "-fx-text-fill: #E74C3C; -fx-font-size: 11px; -fx-font-weight: bold;");
 
                         infoBox.getChildren().addAll(nameLabel, styleLabel, statusLabel);
 
+                        // === NOUVEAU BOUTON "CONSULTER COACH" (EMAIL) ===
+                        Button emailBtn = new Button("📧 Consulter coach");
+                        emailBtn.setStyle(
+                                "-fx-background-color: #9B59B6; " +
+                                        "-fx-text-fill: white; " +
+                                        "-fx-font-weight: bold; " +
+                                        "-fx-padding: 5 10; " +
+                                        "-fx-background-radius: 5;"
+                        );
+                        emailBtn.setTooltip(new Tooltip("Envoyer un email au coach"));
+
+                        emailBtn.setOnAction(e -> {
+                            try {
+                                // Recharger le coach complet pour avoir l'email
+                                CoachMotivationCrud coachCrud = new CoachMotivationCrud();
+                                List<CoachMotivation> allCoaches = coachCrud.readAll();
+                                CoachMotivation fullCoach = allCoaches.stream()
+                                        .filter(c -> c.getIdCoach() == coach.getIdCoach())
+                                        .findFirst()
+                                        .orElse(coach);
+
+                                // Ouvrir la boîte de dialogue d'envoi d'email
+                                showEmailDialog(fullCoach, challenge);
+
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                                showAlert("Erreur", "Impossible de charger les informations du coach", Alert.AlertType.ERROR);
+                            }
+                        });
+
                         Button detailBtn = new Button("📋 Détails");
-                        detailBtn.setStyle(
-                                "-fx-background-color: #3498DB; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10;");
-                        detailBtn.setOnAction(e -> showCoachDetail(coach));
+                        detailBtn.setStyle("-fx-background-color: #3498DB; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 5 10;");
+                        detailBtn.setOnAction(e -> {
+                            try {
+                                CoachMotivationCrud coachCrud = new CoachMotivationCrud();
+                                List<CoachMotivation> allCoaches = coachCrud.readAll();
+                                CoachMotivation fullCoach = allCoaches.stream()
+                                        .filter(c -> c.getIdCoach() == coach.getIdCoach())
+                                        .findFirst()
+                                        .orElse(coach);
+                                showCoachDetail(fullCoach);
+                            } catch (Exception ex) {
+                                ex.printStackTrace();
+                                showAlert("Erreur", "Impossible de charger les détails du coach", Alert.AlertType.ERROR);
+                            }
+                        });
 
                         Region spacer = new Region();
                         HBox.setHgrow(spacer, Priority.ALWAYS);
 
-                        hbox.getChildren().addAll(icon, infoBox, spacer, detailBtn);
+                        hbox.getChildren().addAll(icon, infoBox, spacer, emailBtn, detailBtn);
                         setGraphic(hbox);
                         setCursor(Cursor.HAND);
 
@@ -2012,13 +2147,12 @@ public class ChallengeController implements Initializable {
             });
 
             Button closeButton = new Button("Fermer");
-            closeButton.setStyle(
-                    "-fx-background-color: #E74C3C; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
+            closeButton.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
             closeButton.setOnAction(e -> popupStage.close());
 
             root.getChildren().addAll(titleLabel, coachesList, closeButton);
 
-            Scene scene = new Scene(root, 500, 400); // Un peu plus large
+            Scene scene = new Scene(root, 650, 400); // Agrandi pour accueillir le nouveau bouton
             popupStage.setScene(scene);
             popupStage.showAndWait();
 
@@ -2054,8 +2188,7 @@ public class ChallengeController implements Initializable {
                     } else {
                         HBox hbox = new HBox(10);
                         hbox.setAlignment(Pos.CENTER_LEFT);
-                        hbox.setStyle(
-                                "-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 5;");
+                        hbox.setStyle("-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 5;");
 
                         // Icône selon le type
                         Label icon = new Label(getIconForRecompenseType(recompense.getTypeRecompense()));
@@ -2082,15 +2215,14 @@ public class ChallengeController implements Initializable {
 
                         // Statut
                         Label statusLabel = new Label(recompense.isActif() ? "✅ ACTIF" : "❌ INACTIF");
-                        statusLabel.setStyle(recompense.isActif()
-                                ? "-fx-text-fill: #2ECC71; -fx-font-size: 11px; -fx-font-weight: bold;"
-                                : "-fx-text-fill: #E74C3C; -fx-font-size: 11px; -fx-font-weight: bold;");
+                        statusLabel.setStyle(recompense.isActif() ?
+                                "-fx-text-fill: #2ECC71; -fx-font-size: 11px; -fx-font-weight: bold;" :
+                                "-fx-text-fill: #E74C3C; -fx-font-size: 11px; -fx-font-weight: bold;");
                         infoBox.getChildren().add(statusLabel);
 
                         // Bouton pour voir les détails
                         Button detailBtn = new Button("👁️ Voir");
-                        detailBtn.setStyle(
-                                "-fx-background-color: #9B59B6; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 3 8; -fx-font-size: 11px;");
+                        detailBtn.setStyle("-fx-background-color: #9B59B6; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 3 8; -fx-font-size: 11px;");
                         detailBtn.setOnAction(e -> showRecompenseDetail(recompense));
 
                         HBox bottomBox = new HBox(10);
@@ -2120,8 +2252,7 @@ public class ChallengeController implements Initializable {
             });
 
             Button closeButton = new Button("Fermer");
-            closeButton.setStyle(
-                    "-fx-background-color: #E74C3C; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
+            closeButton.setStyle("-fx-background-color: #E74C3C; -fx-text-fill: white; -fx-font-weight: bold; -fx-padding: 10 20;");
             closeButton.setOnAction(e -> popupStage.close());
 
             root.getChildren().addAll(titleLabel, recompensesList, closeButton);
@@ -2137,8 +2268,7 @@ public class ChallengeController implements Initializable {
 
     /* ================= MÉTHODE POUR ICÔNES DE RÉCOMPENSES ================= */
     private String getIconForRecompenseType(String type) {
-        if (type == null)
-            return "🎁";
+        if (type == null) return "🎁";
 
         switch (type.toLowerCase()) {
             case "médaille":
@@ -2207,11 +2337,11 @@ public class ChallengeController implements Initializable {
             header.getChildren().addAll(profilePane, headerInfo);
 
             // Section des informations
+            // ========== SECTION DES INFORMATIONS ==========
             VBox infoSection = new VBox(15);
-            infoSection.setStyle(
-                    "-fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 10; -fx-padding: 15;");
+            infoSection.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 10; -fx-padding: 15;");
 
-            // Style de coaching
+// Style de coaching
             HBox styleBox = new HBox(10);
             styleBox.setAlignment(Pos.CENTER_LEFT);
             Label styleIcon = new Label("🎭");
@@ -2221,7 +2351,29 @@ public class ChallengeController implements Initializable {
             styleValue.setStyle("-fx-text-fill: #F1C40F; -fx-font-weight: bold;");
             styleBox.getChildren().addAll(styleIcon, styleTitle, styleValue);
 
-            // Description
+// EMAIL
+            HBox emailBox = new HBox(10);
+            emailBox.setAlignment(Pos.CENTER_LEFT);
+            Label emailIcon = new Label("📧");
+            Label emailTitle = new Label("Email:");
+            emailTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-min-width: 100;");
+
+            String emailText = coach.getEmail();
+            Label emailValue = new Label();
+
+            if (emailText != null && !emailText.isEmpty() && !emailText.equals("null")) {
+                emailValue.setText(emailText);
+                emailValue.setStyle("-fx-text-fill: #3498DB; -fx-font-weight: bold; -fx-font-size: 13px;");
+                emailValue.setWrapText(true);
+                emailValue.setMaxWidth(350);
+                emailValue.setTooltip(new Tooltip("Email: " + emailText));
+            } else {
+                emailValue.setText("Non renseigné");
+                emailValue.setStyle("-fx-text-fill: #7F8C8D; -fx-font-style: italic; -fx-font-size: 12px;");
+            }
+            emailBox.getChildren().addAll(emailIcon, emailTitle, emailValue);
+
+// Description
             HBox descBox = new HBox(10);
             descBox.setAlignment(Pos.CENTER_LEFT);
             Label descIcon = new Label("📝");
@@ -2229,26 +2381,26 @@ public class ChallengeController implements Initializable {
             descTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-min-width: 100;");
 
             String description = coach.getDescription();
-            Label descValue = new Label(
-                    description != null && !description.isEmpty() ? description : "Aucune description disponible");
+            Label descValue = new Label(description != null && !description.isEmpty() ?
+                    description : "Aucune description disponible");
             descValue.setStyle("-fx-text-fill: #2ECC71; -fx-font-size: 12px;");
             descValue.setWrapText(true);
             descValue.setMaxWidth(350);
-
             descBox.getChildren().addAll(descIcon, descTitle, descValue);
 
-            // Statut
+// Statut
             HBox statusBox = new HBox(10);
             statusBox.setAlignment(Pos.CENTER_LEFT);
             Label statusIcon = new Label("📈");
             Label statusTitle = new Label("Statut:");
             statusTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-min-width: 100;");
             Label statusValue = new Label(coach.isActif() ? "ACTIF" : "INACTIF");
-            statusValue.setStyle(coach.isActif() ? "-fx-text-fill: #2ECC71; -fx-font-weight: bold;"
-                    : "-fx-text-fill: #E74C3C; -fx-font-weight: bold;");
+            statusValue.setStyle(coach.isActif() ?
+                    "-fx-text-fill: #2ECC71; -fx-font-weight: bold;" :
+                    "-fx-text-fill: #E74C3C; -fx-font-weight: bold;");
             statusBox.getChildren().addAll(statusIcon, statusTitle, statusValue);
 
-            // ID Coach (informations techniques)
+// ID Coach
             HBox idBox = new HBox(10);
             idBox.setAlignment(Pos.CENTER_LEFT);
             Label idIcon = new Label("🆔");
@@ -2258,7 +2410,8 @@ public class ChallengeController implements Initializable {
             idValue.setStyle("-fx-text-fill: #BDC3C7; -fx-font-size: 12px;");
             idBox.getChildren().addAll(idIcon, idTitle, idValue);
 
-            infoSection.getChildren().addAll(styleBox, descBox, statusBox, idBox);
+// Assembler toutes les informations
+            infoSection.getChildren().addAll(styleBox, emailBox, descBox, statusBox, idBox);
 
             // Bouton fermer
             Button closeButton = new Button("Fermer");
@@ -2335,8 +2488,8 @@ public class ChallengeController implements Initializable {
             descTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-min-width: 120;");
 
             String description = recompense.getDescription();
-            Label descValue = new Label(
-                    description != null && !description.isEmpty() ? description : "Aucune description disponible");
+            Label descValue = new Label(description != null && !description.isEmpty() ?
+                    description : "Aucune description disponible");
             descValue.setStyle("-fx-text-fill: #ECF0F1; -fx-font-size: 13px;");
             descValue.setWrapText(true);
             descValue.setMaxWidth(400);
@@ -2353,8 +2506,8 @@ public class ChallengeController implements Initializable {
             conditionTitle.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-min-width: 120;");
 
             String condition = recompense.getConditionObtention();
-            Label conditionValue = new Label(
-                    condition != null && !condition.trim().isEmpty() ? condition : "Aucune condition spécifique");
+            Label conditionValue = new Label(condition != null && !condition.trim().isEmpty() ?
+                    condition : "Aucune condition spécifique");
             conditionValue.setStyle("-fx-text-fill: #F1C40F; -fx-font-weight: bold; -fx-font-size: 13px;");
             conditionValue.setWrapText(true);
             conditionValue.setMaxWidth(400);
@@ -2374,9 +2527,9 @@ public class ChallengeController implements Initializable {
             Label statusLabel = new Label("Statut:");
             statusLabel.setStyle("-fx-text-fill: rgba(255,255,255,0.8); -fx-font-size: 11px;");
             Label statusValue = new Label(recompense.isActif() ? "ACTIVE" : "INACTIVE");
-            statusValue.setStyle(
-                    recompense.isActif() ? "-fx-text-fill: #2ECC71; -fx-font-weight: bold; -fx-font-size: 14px;"
-                            : "-fx-text-fill: #E74C3C; -fx-font-weight: bold; -fx-font-size: 14px;");
+            statusValue.setStyle(recompense.isActif() ?
+                    "-fx-text-fill: #2ECC71; -fx-font-weight: bold; -fx-font-size: 14px;" :
+                    "-fx-text-fill: #E74C3C; -fx-font-weight: bold; -fx-font-size: 14px;");
             statusBox.getChildren().addAll(statusIcon, statusLabel, statusValue);
 
             // ID
@@ -2432,8 +2585,7 @@ public class ChallengeController implements Initializable {
 
     /* ================= MÉTHODE POUR COULEURS DE RÉCOMPENSES ================= */
     private String getColorForRecompenseType(String type) {
-        if (type == null)
-            return "linear-gradient(to bottom right, #9B59B6, #8E44AD)";
+        if (type == null) return "linear-gradient(to bottom right, #9B59B6, #8E44AD)";
 
         switch (type.toLowerCase()) {
             case "médaille":
@@ -2459,6 +2611,7 @@ public class ChallengeController implements Initializable {
                 return "linear-gradient(to bottom right, #9B59B6, #8E44AD)";
         }
 
+
     }
 
     /* ================= CARTE DÉTAIL CHALLENGE ================= */
@@ -2483,7 +2636,8 @@ public class ChallengeController implements Initializable {
                             "-fx-border-color: rgba(255,255,255,0.3);" +
                             "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 25, 0, 0, 10);" +
                             "-fx-min-width: 600;" +
-                            "-fx-max-width: 700;");
+                            "-fx-max-width: 700;"
+            );
 
             // ============= EN-TÊTE AVEC BADGE ET TITRE =============
             HBox headerBox = new HBox(20);
@@ -2494,7 +2648,8 @@ public class ChallengeController implements Initializable {
             iconContainer.setStyle(
                     "-fx-background-color: rgba(255,255,255,0.2);" +
                             "-fx-background-radius: 30;" +
-                            "-fx-padding: 20;");
+                            "-fx-padding: 20;"
+            );
 
             Label mainIcon = new Label(getIconForChallenge(challenge));
             mainIcon.setStyle("-fx-font-size: 48px; -fx-text-fill: white;");
@@ -2508,7 +2663,8 @@ public class ChallengeController implements Initializable {
                     "-fx-font-size: 28px;" +
                             "-fx-font-weight: 900;" +
                             "-fx-text-fill: white;" +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);");
+                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);"
+            );
             titleLabel.setWrapText(true);
 
             HBox typeBadgeBox = new HBox(10);
@@ -2521,7 +2677,8 @@ public class ChallengeController implements Initializable {
                             "-fx-padding: 8 20;" +
                             "-fx-font-size: 14px;" +
                             "-fx-font-weight: bold;" +
-                            "-fx-text-fill: white;");
+                            "-fx-text-fill: white;"
+            );
 
             Label difficultyBadge = new Label(challenge.getNiveauDifficulte());
             difficultyBadge.setStyle(getDifficultyStyle(challenge.getNiveauDifficulte()));
@@ -2549,7 +2706,8 @@ public class ChallengeController implements Initializable {
                                 "-fx-font-weight: bold;" +
                                 "-fx-border-color: rgba(46,204,113,0.8);" +
                                 "-fx-border-radius: 20;" +
-                                "-fx-border-width: 1.5;");
+                                "-fx-border-width: 1.5;"
+                );
             } else {
                 statusLabel.setText("● INACTIF");
                 statusLabel.setStyle(
@@ -2561,7 +2719,8 @@ public class ChallengeController implements Initializable {
                                 "-fx-font-weight: bold;" +
                                 "-fx-border-color: rgba(231,76,60,0.8);" +
                                 "-fx-border-radius: 20;" +
-                                "-fx-border-width: 1.5;");
+                                "-fx-border-width: 1.5;"
+                );
             }
 
             headerBox.getChildren().add(statusBox);
@@ -2572,7 +2731,8 @@ public class ChallengeController implements Initializable {
                     "-fx-background-color: rgba(255,255,255,0.3);" +
                             "-fx-background-insets: 0;" +
                             "-fx-background-radius: 2;" +
-                            "-fx-pref-height: 2;");
+                            "-fx-pref-height: 2;"
+            );
 
             // ============= SECTION DESCRIPTION =============
             VBox descriptionSection = new VBox(15);
@@ -2581,7 +2741,8 @@ public class ChallengeController implements Initializable {
             descTitle.setStyle(
                     "-fx-font-size: 16px;" +
                             "-fx-font-weight: 700;" +
-                            "-fx-text-fill: rgba(255,255,255,0.9);");
+                            "-fx-text-fill: rgba(255,255,255,0.9);"
+            );
 
             Label descriptionContent = new Label(challenge.getDescription());
             descriptionContent.setWrapText(true);
@@ -2594,14 +2755,14 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 15;" +
                             "-fx-border-color: rgba(255,255,255,0.2);" +
                             "-fx-border-radius: 15;" +
-                            "-fx-border-width: 1;");
+                            "-fx-border-width: 1;"
+            );
             descriptionContent.setMaxWidth(620);
 
             descriptionSection.getChildren().addAll(descTitle, descriptionContent);
 
             // ============= GRILLE D'INFORMATIONS PRINCIPALES =============
-            // ============= GRILLE D'INFORMATIONS PRINCIPALES - VERSION AMÉLIORÉE
-            // =============
+            // ============= GRILLE D'INFORMATIONS PRINCIPALES - VERSION AMÉLIORÉE =============
             GridPane infoGrid = new GridPane();
             infoGrid.setHgap(20);
             infoGrid.setVgap(15);
@@ -2612,7 +2773,7 @@ public class ChallengeController implements Initializable {
                             "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.1), 10, 0, 0, 2);" // Ombre légère
             );
 
-            // Configuration des colonnes
+// Configuration des colonnes
             ColumnConstraints col1 = new ColumnConstraints();
             col1.setPrefWidth(200);
             col1.setHgrow(Priority.SOMETIMES);
@@ -2627,34 +2788,34 @@ public class ChallengeController implements Initializable {
 
             infoGrid.getColumnConstraints().addAll(col1, col2, col3);
 
-            // ===== LIGNE 1 =====
-            // DURÉE
+// ===== LIGNE 1 =====
+// DURÉE
             VBox durationBox = createModernInfoBox("⏱️", "DURÉE",
                     challenge.getDureeJours() + " jours", "#2C3E50");
             infoGrid.add(durationBox, 0, 0);
 
-            // DIFFICULTÉ
+// DIFFICULTÉ
             VBox difficultyBox = createModernInfoBox("🎯", "DIFFICULTÉ",
                     challenge.getNiveauDifficulte(), getDifficultyTextColor(challenge.getNiveauDifficulte()));
             infoGrid.add(difficultyBox, 1, 0);
 
-            // DATE DE CRÉATION
+// DATE DE CRÉATION
             VBox creationBox = createModernInfoBox("📅", "DATE DE CRÉATION",
                     getFormattedDate(challenge), "#16A085");
             infoGrid.add(creationBox, 2, 0);
 
-            // ===== LIGNE 2 =====
-            // TYPE
+// ===== LIGNE 2 =====
+// TYPE
             VBox typeInfoBox = createModernInfoBox("📂", "TYPE",
                     challenge.getTypeChallenge(), "#E67E22");
             infoGrid.add(typeInfoBox, 0, 1);
 
-            // ID CHALLENGE
+// ID CHALLENGE
             VBox idBox = createModernInfoBox("🆔", "ID CHALLENGE",
                     "#" + challenge.getIdChallenge(), "#7F8C8D");
             infoGrid.add(idBox, 1, 1);
 
-            // DATE D'EXPIRATION
+// DATE D'EXPIRATION
             LocalDateTime expirationDate = LocalDateTime.now().plusDays(challenge.getDureeJours());
             String expirationDateStr = expirationDate.format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm"));
             VBox expirationBox = createModernInfoBox("⏰", "DATE D'EXPIRATION",
@@ -2663,10 +2824,11 @@ public class ChallengeController implements Initializable {
 
             // Récupérer les coaches et récompenses associés
             List<CoachMotivation> coaches = challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge());
-            List<Recompense> recompenses = challengeRecompenseCrud
-                    .getRecompensesByChallenge(challenge.getIdChallenge());
+            List<Recompense> recompenses = challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge());
 
-            // ============= AJOUTER LE BLOCK statsBox ICI =============
+
+
+// ============= AJOUTER LE BLOCK statsBox ICI =============
             HBox statsBox = new HBox(20);
             statsBox.setAlignment(Pos.CENTER_LEFT);
             statsBox.setStyle(
@@ -2675,8 +2837,10 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 15;" +
                             "-fx-border-color: rgba(255,255,255,0.1);" +
                             "-fx-border-radius: 15;" +
-                            "-fx-border-width: 1;");
-            // =======================================================
+                            "-fx-border-width: 1;"
+            );
+// =======================================================
+
 
             // Badge Coaches
             VBox coachStatsBox = new VBox(8);
@@ -2719,9 +2883,9 @@ public class ChallengeController implements Initializable {
             Label statusIcon = new Label("⚡");
             statusIcon.setStyle("-fx-font-size: 20px;");
             Label statusValue = new Label(challenge.isActif() ? "ACTIF" : "INACTIF");
-            statusValue
-                    .setStyle(challenge.isActif() ? "-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: #2ECC71;"
-                            : "-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: #E74C3C;");
+            statusValue.setStyle(challenge.isActif() ?
+                    "-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: #2ECC71;" :
+                    "-fx-font-size: 18px; -fx-font-weight: 900; -fx-text-fill: #E74C3C;");
             statusHeader.getChildren().addAll(statusIcon, statusValue);
 
             Label statusDesc = new Label("État actuel");
@@ -2737,7 +2901,8 @@ public class ChallengeController implements Initializable {
                 coachesTitle.setStyle(
                         "-fx-font-size: 14px;" +
                                 "-fx-font-weight: 700;" +
-                                "-fx-text-fill: rgba(255,255,255,0.9);");
+                                "-fx-text-fill: rgba(255,255,255,0.9);"
+                );
 
                 // CORRECTION: Utiliser FlowPane au lieu de HBox avec setWrapText
                 FlowPane coachesList = new FlowPane(Orientation.HORIZONTAL, 15, 15);
@@ -2756,7 +2921,8 @@ public class ChallengeController implements Initializable {
                                     "-fx-background-radius: 20;" +
                                     "-fx-padding: 8 15;" +
                                     "-fx-font-size: 12px;" +
-                                    "-fx-text-fill: white;");
+                                    "-fx-text-fill: white;"
+                    );
                     moreLabel.setAlignment(Pos.CENTER);
 
                     // Centrer verticalement
@@ -2776,7 +2942,8 @@ public class ChallengeController implements Initializable {
                 rewardsTitle.setStyle(
                         "-fx-font-size: 14px;" +
                                 "-fx-font-weight: 700;" +
-                                "-fx-text-fill: rgba(255,255,255,0.9);");
+                                "-fx-text-fill: rgba(255,255,255,0.9);"
+                );
 
                 // CORRECTION: Utiliser FlowPane au lieu de HBox avec setWrapText
                 FlowPane rewardsList = new FlowPane(Orientation.HORIZONTAL, 15, 15);
@@ -2795,7 +2962,8 @@ public class ChallengeController implements Initializable {
                                     "-fx-background-radius: 20;" +
                                     "-fx-padding: 8 15;" +
                                     "-fx-font-size: 12px;" +
-                                    "-fx-text-fill: white;");
+                                    "-fx-text-fill: white;"
+                    );
                     moreLabel.setAlignment(Pos.CENTER);
 
                     // Centrer verticalement
@@ -2817,7 +2985,8 @@ public class ChallengeController implements Initializable {
             footerLabel.setStyle(
                     "-fx-font-size: 11px;" +
                             "-fx-text-fill: rgba(255,255,255,0.6);" +
-                            "-fx-font-style: italic;");
+                            "-fx-font-style: italic;"
+            );
             footerBox.getChildren().add(footerLabel);
 
             // ============= BOUTON FERMER =============
@@ -2830,7 +2999,8 @@ public class ChallengeController implements Initializable {
                             "-fx-padding: 12 40;" +
                             "-fx-background-radius: 30;" +
                             "-fx-cursor: hand;" +
-                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 5, 0, 0, 2);");
+                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.2), 5, 0, 0, 2);"
+            );
 
             closeButton.setOnMouseEntered(e -> {
                 closeButton.setStyle(
@@ -2841,7 +3011,8 @@ public class ChallengeController implements Initializable {
                                 "-fx-padding: 12 40;" +
                                 "-fx-background-radius: 30;" +
                                 "-fx-cursor: hand;" +
-                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 10, 0, 0, 4);");
+                                "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 10, 0, 0, 4);"
+                );
             });
 
             closeButton.setOnMouseExited(e -> {
@@ -2852,7 +3023,8 @@ public class ChallengeController implements Initializable {
                                 "-fx-font-size: 14px;" +
                                 "-fx-padding: 12 40;" +
                                 "-fx-background-radius: 30;" +
-                                "-fx-cursor: hand;");
+                                "-fx-cursor: hand;"
+                );
             });
 
             closeButton.setOnAction(e -> detailStage.close());
@@ -2864,7 +3036,8 @@ public class ChallengeController implements Initializable {
                     separator,
                     descriptionSection,
                     infoGrid,
-                    statsBox);
+                    statsBox
+            );
 
             if (!coaches.isEmpty()) {
                 content.getChildren().add(coachesSection);
@@ -2883,7 +3056,8 @@ public class ChallengeController implements Initializable {
             scrollPane.setStyle(
                     "-fx-background-color: transparent;" +
                             "-fx-background: transparent;" +
-                            "-fx-border-color: transparent;");
+                            "-fx-border-color: transparent;"
+            );
             scrollPane.setFitToWidth(true);
             scrollPane.setFitToHeight(true);
 
@@ -2893,15 +3067,12 @@ public class ChallengeController implements Initializable {
 
         } catch (Exception e) {
             e.printStackTrace();
-            showAlert("Erreur", "Impossible d'afficher les détails du challenge: " + e.getMessage(),
-                    Alert.AlertType.ERROR);
+            showAlert("Erreur", "Impossible d'afficher les détails du challenge: " + e.getMessage(), Alert.AlertType.ERROR);
         }
     }
 
-    /*
-     * ================= MISSING HELPER METHODS FOR CHALLENGE DETAIL CARD
-     * =================
-     */
+
+    /* ================= MISSING HELPER METHODS FOR CHALLENGE DETAIL CARD ================= */
 
     /**
      * Returns a gradient color based on challenge status and difficulty
@@ -2986,7 +3157,8 @@ public class ChallengeController implements Initializable {
         box.setStyle(
                 "-fx-padding: 12;" +
                         "-fx-background-color: rgba(255,255,255,0.15);" +
-                        "-fx-background-radius: 12;");
+                        "-fx-background-radius: 12;"
+        );
 
         HBox header = new HBox(10);
         header.setAlignment(Pos.CENTER_LEFT);
@@ -2998,7 +3170,8 @@ public class ChallengeController implements Initializable {
         titleLabel.setStyle(
                 "-fx-font-size: 11px;" +
                         "-fx-font-weight: bold;" +
-                        "-fx-text-fill: rgba(255,255,255,0.8);");
+                        "-fx-text-fill: rgba(255,255,255,0.8);"
+        );
 
         header.getChildren().addAll(iconLabel, titleLabel);
 
@@ -3006,7 +3179,8 @@ public class ChallengeController implements Initializable {
         valueLabel.setStyle(
                 "-fx-font-size: 16px;" +
                         "-fx-font-weight: 900;" +
-                        "-fx-text-fill: " + color + ";");
+                        "-fx-text-fill: " + color + ";"
+        );
         valueLabel.setWrapText(true);
 
         box.getChildren().addAll(header, valueLabel);
@@ -3051,8 +3225,7 @@ public class ChallengeController implements Initializable {
         return LocalDateTime.now().format(DateTimeFormatter.ofPattern("dd/MM/yyyy HH:mm:ss"));
 
         // If you add a creationDate field to Challenge class, use:
-        // return
-        // challenge.getCreationDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
+        // return challenge.getCreationDate().format(DateTimeFormatter.ofPattern("dd/MM/yyyy"));
     }
 
     /**
@@ -3066,7 +3239,8 @@ public class ChallengeController implements Initializable {
                         "-fx-background-radius: 12;" +
                         "-fx-padding: 12 15;" +
                         "-fx-min-width: 140;" +
-                        "-fx-max-width: 140;");
+                        "-fx-max-width: 140;"
+        );
 
         // Avatar
         Label avatarIcon = new Label("👤");
@@ -3077,7 +3251,8 @@ public class ChallengeController implements Initializable {
         nameLabel.setStyle(
                 "-fx-font-size: 13px;" +
                         "-fx-font-weight: bold;" +
-                        "-fx-text-fill: white;");
+                        "-fx-text-fill: white;"
+        );
         nameLabel.setWrapText(true);
         nameLabel.setAlignment(Pos.CENTER);
 
@@ -3085,7 +3260,8 @@ public class ChallengeController implements Initializable {
         Label styleLabel = new Label(coach.getStyle());
         styleLabel.setStyle(
                 "-fx-font-size: 11px;" +
-                        "-fx-text-fill: rgba(255,255,255,0.8);");
+                        "-fx-text-fill: rgba(255,255,255,0.8);"
+        );
 
         card.getChildren().addAll(avatarIcon, nameLabel, styleLabel);
 
@@ -3096,7 +3272,8 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 12;" +
                             "-fx-padding: 12 15;" +
                             "-fx-min-width: 140;" +
-                            "-fx-max-width: 140;");
+                            "-fx-max-width: 140;"
+            );
         });
 
         card.setOnMouseExited(e -> {
@@ -3105,7 +3282,8 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 12;" +
                             "-fx-padding: 12 15;" +
                             "-fx-min-width: 140;" +
-                            "-fx-max-width: 140;");
+                            "-fx-max-width: 140;"
+            );
         });
 
         card.setCursor(Cursor.HAND);
@@ -3125,7 +3303,8 @@ public class ChallengeController implements Initializable {
                         "-fx-background-radius: 12;" +
                         "-fx-padding: 12 15;" +
                         "-fx-min-width: 140;" +
-                        "-fx-max-width: 140;");
+                        "-fx-max-width: 140;"
+        );
 
         // Icon based on reward type
         Label iconLabel = new Label(getIconForRecompenseType(reward.getTypeRecompense()));
@@ -3136,7 +3315,8 @@ public class ChallengeController implements Initializable {
         titleLabel.setStyle(
                 "-fx-font-size: 13px;" +
                         "-fx-font-weight: bold;" +
-                        "-fx-text-fill: white;");
+                        "-fx-text-fill: white;"
+        );
         titleLabel.setWrapText(true);
         titleLabel.setAlignment(Pos.CENTER);
 
@@ -3144,7 +3324,8 @@ public class ChallengeController implements Initializable {
         Label typeLabel = new Label(reward.getTypeRecompense());
         typeLabel.setStyle(
                 "-fx-font-size: 11px;" +
-                        "-fx-text-fill: rgba(255,255,255,0.8);");
+                        "-fx-text-fill: rgba(255,255,255,0.8);"
+        );
 
         card.getChildren().addAll(iconLabel, titleLabel, typeLabel);
 
@@ -3155,7 +3336,8 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 12;" +
                             "-fx-padding: 12 15;" +
                             "-fx-min-width: 140;" +
-                            "-fx-max-width: 140;");
+                            "-fx-max-width: 140;"
+            );
         });
 
         card.setOnMouseExited(e -> {
@@ -3164,7 +3346,8 @@ public class ChallengeController implements Initializable {
                             "-fx-background-radius: 12;" +
                             "-fx-padding: 12 15;" +
                             "-fx-min-width: 140;" +
-                            "-fx-max-width: 140;");
+                            "-fx-max-width: 140;"
+            );
         });
 
         card.setCursor(Cursor.HAND);
@@ -3172,6 +3355,7 @@ public class ChallengeController implements Initializable {
 
         return card;
     }
+
 
     /**
      * Crée une carte d'information moderne avec texte noir sur fond blanc
@@ -3186,7 +3370,8 @@ public class ChallengeController implements Initializable {
                         "-fx-border-color: #ECF0F1;" +
                         "-fx-border-radius: 10;" +
                         "-fx-border-width: 1;" +
-                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 5, 0, 0, 1);");
+                        "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.05), 5, 0, 0, 1);"
+        );
         box.setPrefWidth(200);
         box.setMaxWidth(Double.MAX_VALUE);
 
@@ -3202,7 +3387,8 @@ public class ChallengeController implements Initializable {
                 "-fx-font-size: 11px;" +
                         "-fx-font-weight: bold;" +
                         "-fx-text-fill: #7F8C8D;" + // Gris foncé
-                        "-fx-uppercase: true;");
+                        "-fx-uppercase: true;"
+        );
 
         header.getChildren().addAll(iconLabel, titleLabel);
 
@@ -3224,8 +3410,7 @@ public class ChallengeController implements Initializable {
      * Retourne une couleur de texte selon la difficulté
      */
     private String getDifficultyTextColor(String difficulty) {
-        if (difficulty == null)
-            return "#2C3E50";
+        if (difficulty == null) return "#2C3E50";
 
         switch (difficulty.toLowerCase()) {
             case "facile":
@@ -3238,6 +3423,1324 @@ public class ChallengeController implements Initializable {
                 return "#8E44AD"; // Violet
             default:
                 return "#2C3E50"; // Gris foncé
+        }
+    }
+
+
+
+    /* ================= CONFIGURATION DU SYSTÈME DE TRI ================= */
+    private void setupSortControls() {
+        // Créer le conteneur pour les boutons de tri
+        HBox sortContainer = new HBox(15);
+        sortContainer.setAlignment(Pos.CENTER_LEFT);
+        sortContainer.setStyle("-fx-background-color: rgba(255,255,255,0.1); -fx-background-radius: 25; -fx-padding: 10 20;");
+
+        // Label "TRIER PAR :"
+        Label sortLabel = new Label("🔽 TRIER PAR :");
+        sortLabel.setStyle("-fx-font-size: 11px; -fx-font-weight: bold; -fx-text-fill: #B4C6E7; -fx-letter-spacing: 1px;");
+
+        // Groupe de bascules pour les radios
+        sortToggleGroup = new ToggleGroup();
+
+        // Style commun pour les boutons radio
+        String radioStyle = "-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 5 10;";
+
+        // Bouton radio : Nom (A-Z)
+        RadioButton nameAZBtn = createStyledRadio("👤 Nom (A-Z)", "name_asc", radioStyle);
+
+        // Bouton radio : Nom (Z-A)
+        RadioButton nameZABtn = createStyledRadio("👤 Nom (Z-A)", "name_desc", radioStyle);
+
+        // Bouton radio : Durée (croissante)
+        RadioButton durationAscBtn = createStyledRadio("⏱️ Durée ↑", "duration_asc", radioStyle);
+
+        // Bouton radio : Durée (décroissante)
+        RadioButton durationDescBtn = createStyledRadio("⏱️ Durée ↓", "duration_desc", radioStyle);
+
+        // Bouton radio : Date (récent → ancien)
+        RadioButton dateDescBtn = createStyledRadio("📅 Plus récent", "date_desc", radioStyle);
+
+        // Bouton radio : Date (ancien → récent)
+        RadioButton dateAscBtn = createStyledRadio("📅 Plus ancien", "date_asc", radioStyle);
+
+        // Bouton radio : Statut (actifs en premier)
+        RadioButton statusActiveBtn = createStyledRadio("✅ Actifs", "status_active", radioStyle);
+
+        // Bouton radio : Statut (inactifs en premier)
+        RadioButton statusInactiveBtn = createStyledRadio("❌ Inactifs", "status_inactive", radioStyle);
+
+        // Définir le tri par défaut (plus récent)
+        dateDescBtn.setSelected(true);
+
+        // Ajouter les listeners pour chaque bouton
+        nameAZBtn.setOnAction(e -> sortChallenges("name_asc"));
+        nameZABtn.setOnAction(e -> sortChallenges("name_desc"));
+        durationAscBtn.setOnAction(e -> sortChallenges("duration_asc"));
+        durationDescBtn.setOnAction(e -> sortChallenges("duration_desc"));
+        dateDescBtn.setOnAction(e -> sortChallenges("date_desc"));
+        dateAscBtn.setOnAction(e -> sortChallenges("date_asc"));
+        statusActiveBtn.setOnAction(e -> sortChallenges("status_active"));
+        statusInactiveBtn.setOnAction(e -> sortChallenges("status_inactive"));
+
+        // Ajouter les boutons au conteneur
+        sortContainer.getChildren().addAll(
+                sortLabel,
+                nameAZBtn, nameZABtn,
+                durationAscBtn, durationDescBtn,
+                dateDescBtn, dateAscBtn,
+                statusActiveBtn, statusInactiveBtn
+        );
+
+        // Ajouter le conteneur à l'interface (à côté de la recherche)
+        // Vous devez avoir un conteneur dans votre FXML avec fx:id="sortBox"
+        // Si vous n'en avez pas, vous pouvez l'ajouter dans le header
+        if (sortBox != null) {
+            sortBox.getChildren().add(sortContainer);
+        } else {
+            // Alternative : chercher le conteneur parent et l'ajouter
+            HBox headerRight = (HBox) searchField.getParent();
+            headerRight.getChildren().add(1, sortContainer); // Ajouter après la recherche
+        }
+    }
+
+
+    private RadioButton createStyledRadio(String text, String userData, String style) {
+        RadioButton radio = new RadioButton(text);
+        radio.setToggleGroup(sortToggleGroup);
+        radio.setUserData(userData);
+        radio.setStyle(style);
+
+        // Style au survol
+        radio.setOnMouseEntered(e ->
+                radio.setStyle("-fx-text-fill: #00f2fe; -fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 5 10;")
+        );
+        radio.setOnMouseExited(e ->
+                radio.setStyle("-fx-text-fill: white; -fx-font-size: 12px; -fx-font-weight: bold; -fx-padding: 5 10;")
+        );
+
+        return radio;
+    }
+
+    private void sortChallenges(String sortType) {
+        currentSortType = sortType;
+
+        // Récupérer la liste actuelle (filtrée ou complète)
+        ObservableList<Challenge> currentList = challengeListView.getItems();
+        List<Challenge> sortedList = new ArrayList<>(currentList);
+
+        // Appliquer le tri selon le type
+        switch (sortType) {
+            case "name_asc":
+                sortedList.sort(Comparator.comparing(Challenge::getTitre, String.CASE_INSENSITIVE_ORDER));
+                break;
+            case "name_desc":
+                sortedList.sort((c1, c2) -> c2.getTitre().compareToIgnoreCase(c1.getTitre()));
+                break;
+            case "duration_asc":
+                sortedList.sort(Comparator.comparingInt(Challenge::getDureeJours));
+                break;
+            case "duration_desc":
+                sortedList.sort((c1, c2) -> Integer.compare(c2.getDureeJours(), c1.getDureeJours()));
+                break;
+            case "date_desc":
+                // Tri par ID (le plus récent = ID le plus grand)
+                sortedList.sort((c1, c2) -> Integer.compare(c2.getIdChallenge(), c1.getIdChallenge()));
+                break;
+            case "date_asc":
+                // Tri par ID (le plus ancien = ID le plus petit)
+                sortedList.sort(Comparator.comparingInt(Challenge::getIdChallenge));
+                break;
+            case "status_active":
+                // Actifs en premier, puis inactifs
+                sortedList.sort((c1, c2) -> {
+                    if (c1.isActif() && !c2.isActif()) return -1;
+                    if (!c1.isActif() && c2.isActif()) return 1;
+                    return 0;
+                });
+                break;
+            case "status_inactive":
+                // Inactifs en premier, puis actifs
+                sortedList.sort((c1, c2) -> {
+                    if (!c1.isActif() && c2.isActif()) return -1;
+                    if (c1.isActif() && !c2.isActif()) return 1;
+                    return 0;
+                });
+                break;
+        }
+
+        // Mettre à jour la ListView
+        challengeListView.setItems(FXCollections.observableArrayList(sortedList));
+
+        // Animation de confirmation
+        animateSortChange();
+    }
+
+    private void animateSortChange() {
+        // Animation de fondu pour la ListView
+        javafx.animation.FadeTransition fade = new javafx.animation.FadeTransition(
+                javafx.util.Duration.millis(300), challengeListView
+        );
+        fade.setFromValue(0.5);
+        fade.setToValue(1.0);
+        fade.play();
+
+        // Petit effet sonore visuel (changement de couleur du header)
+        if (sortBox != null && !sortBox.getChildren().isEmpty()) {
+            HBox sortContainer = (HBox) sortBox.getChildren().get(0);
+            String originalStyle = sortContainer.getStyle();
+            sortContainer.setStyle("-fx-background-color: rgba(0,242,254,0.3); -fx-background-radius: 25; -fx-padding: 10 20;");
+
+            javafx.animation.PauseTransition pause = new javafx.animation.PauseTransition(javafx.util.Duration.millis(200));
+            pause.setOnFinished(e -> sortContainer.setStyle(originalStyle));
+            pause.play();
+        }
+    }
+
+
+    private void showEmailDialog(CoachMotivation coach, Challenge challenge) {
+        try {
+            Stage emailStage = new Stage();
+            emailStage.setTitle("📧 Envoyer un email à " + coach.getNomCoach());
+            emailStage.initModality(Modality.APPLICATION_MODAL);
+            emailStage.initOwner(challengeListView.getScene().getWindow());
+
+            VBox root = new VBox(20);
+            root.setPadding(new Insets(25));
+            root.setStyle("-fx-background-color: linear-gradient(to bottom, #f5f7fa, #c3cfe2); -fx-background-radius: 15;");
+
+            // En-tête
+            Label titleLabel = new Label("📧 ENVOYER UN EMAIL");
+            titleLabel.setStyle("-fx-font-size: 20px; -fx-font-weight: 900; -fx-text-fill: #2C3E50;");
+
+            // Informations du destinataire
+            VBox recipientBox = new VBox(10);
+            recipientBox.setStyle("-fx-background-color: white; -fx-background-radius: 10; -fx-padding: 15;");
+
+            Label recipientLabel = new Label("Destinataire:");
+            recipientLabel.setStyle("-fx-font-weight: bold;");
+
+            HBox coachInfo = new HBox(15);
+            coachInfo.setAlignment(Pos.CENTER_LEFT);
+
+            Label coachIcon = new Label("👤");
+            coachIcon.setStyle("-fx-font-size: 24px;");
+
+            VBox coachDetails = new VBox(5);
+            Label coachName = new Label(coach.getNomCoach());
+            coachName.setStyle("-fx-font-size: 16px; -fx-font-weight: bold;");
+
+            String email = coach.getEmail();
+            Label coachEmail = new Label();
+            if (email != null && !email.isEmpty() && !email.equals("null")) {
+                coachEmail.setText(email);
+                coachEmail.setStyle("-fx-text-fill: #3498DB;");
+            } else {
+                coachEmail.setText("Email non renseigné");
+                coachEmail.setStyle("-fx-text-fill: #E74C3C; -fx-font-style: italic;");
+            }
+
+            coachDetails.getChildren().addAll(coachName, coachEmail);
+            coachInfo.getChildren().addAll(coachIcon, coachDetails);
+
+            recipientBox.getChildren().addAll(recipientLabel, coachInfo);
+
+            // Champs du formulaire d'email
+            VBox formBox = new VBox(15);
+            formBox.setStyle("-fx-background-color: white; -fx-background-radius: 10; -fx-padding: 15;");
+
+            // Sujet
+            VBox subjectBox = new VBox(5);
+            Label subjectLabel = new Label("Sujet:");
+            subjectLabel.setStyle("-fx-font-weight: bold;");
+            TextField subjectField = new TextField();
+            subjectField.setPromptText("Sujet de l'email");
+            subjectField.setText("Invitation au challenge: " + challenge.getTitre());
+            subjectBox.getChildren().addAll(subjectLabel, subjectField);
+
+            // Message
+            VBox messageBox = new VBox(5);
+            Label messageLabel = new Label("Message:");
+            messageLabel.setStyle("-fx-font-weight: bold;");
+            TextArea messageArea = new TextArea();
+            messageArea.setPromptText("Votre message ici...");
+            messageArea.setPrefRowCount(10);
+            messageArea.setText(generateEmailTemplate(coach, challenge));
+            messageBox.getChildren().addAll(messageLabel, messageArea);
+
+            formBox.getChildren().addAll(subjectBox, messageBox);
+
+            // Boutons
+            HBox buttonBox = new HBox(15);
+            buttonBox.setAlignment(Pos.CENTER);
+
+            Button sendButton = new Button("📤 Envoyer");
+            sendButton.setStyle(
+                    "-fx-background-color: #2ECC71; " +
+                            "-fx-text-fill: white; " +
+                            "-fx-font-weight: bold; " +
+                            "-fx-padding: 12 30; " +
+                            "-fx-background-radius: 25; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-cursor: hand;"
+            );
+
+            Button cancelButton = new Button("❌ Annuler");
+            cancelButton.setStyle(
+                    "-fx-background-color: #E74C3C; " +
+                            "-fx-text-fill: white; " +
+                            "-fx-font-weight: bold; " +
+                            "-fx-padding: 12 30; " +
+                            "-fx-background-radius: 25; " +
+                            "-fx-font-size: 14px; " +
+                            "-fx-cursor: hand;"
+            );
+
+            buttonBox.getChildren().addAll(sendButton, cancelButton);
+
+            // Action du bouton Envoyer
+            sendButton.setOnAction(e -> {
+                String to = coach.getEmail();
+                if (to == null || to.isEmpty() || to.equals("null")) {
+                    showAlert("Erreur", "L'adresse email du coach n'est pas renseignée.", Alert.AlertType.ERROR);
+                    return;
+                }
+
+                String subject = subjectField.getText().trim();
+                String message = messageArea.getText().trim();
+
+                if (subject.isEmpty() || message.isEmpty()) {
+                    showAlert("Erreur", "Veuillez remplir tous les champs.", Alert.AlertType.ERROR);
+                    return;
+                }
+
+                // Ici vous appellerez votre service d'envoi d'email
+                // Pour l'instant, on simule l'envoi
+                boolean sent = sendEmail(to, subject, message);
+
+                if (sent) {
+                    showAlert("Succès", "Email envoyé avec succès à " + coach.getNomCoach(), Alert.AlertType.INFORMATION);
+                    emailStage.close();
+                } else {
+                    showAlert("Erreur", "L'envoi de l'email a échoué. Vérifiez votre configuration.", Alert.AlertType.ERROR);
+                }
+            });
+
+            cancelButton.setOnAction(e -> emailStage.close());
+
+            // Assemblage final
+            root.getChildren().addAll(titleLabel, recipientBox, formBox, buttonBox);
+
+            Scene scene = new Scene(root, 500, 600);
+            emailStage.setScene(scene);
+            emailStage.showAndWait();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Impossible d'ouvrir la boîte d'envoi d'email", Alert.AlertType.ERROR);
+        }
+    }
+
+    // Méthode pour générer un template d'email
+    private String generateEmailTemplate(CoachMotivation coach, Challenge challenge) {
+        return String.format(
+                "Bonjour %s,\n\n" +
+                        "Nous sommes ravis de vous inviter à participer au challenge '%s' en tant que coach.\n\n" +
+                        "Détails du challenge:\n" +
+                        "- Titre: %s\n" +
+                        "- Description: %s\n" +
+                        "- Durée: %d jours\n" +
+                        "- Difficulté: %s\n" +
+                        "- Type: %s\n\n" +
+                        "Veuillez confirmer votre participation en répondant à cet email.\n\n" +
+                        "Cordialement,\n" +
+                        "L'équipe Challenge Manager Pro",
+                coach.getNomCoach(),
+                challenge.getTitre(),
+                challenge.getTitre(),
+                challenge.getDescription(),
+                challenge.getDureeJours(),
+                challenge.getNiveauDifficulte(),
+                challenge.getTypeChallenge()
+        );
+    }
+
+    // Méthode temporaire pour simuler l'envoi d'email (à remplacer par EmailSender.sendEmail)
+    private boolean sendEmail(String to, String subject, String content) {
+        return EmailSender.sendEmail(to, subject, content);
+    }
+
+
+
+
+    private void openTaskGeneratorChatbot(Challenge challenge) {
+        // Récupérer les récompenses associées au challenge
+        List<Recompense> recompenses = challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge());
+
+        if (recompenses.isEmpty()) {
+            System.out.println("⚠️ Attention: Pas de récompenses pour ce challenge.");
+        }
+
+        TaskChatbotController chatbot = new TaskChatbotController();
+        chatbot.show(challenge, recompenses);
+    }
+
+
+
+    /* ================= GÉNÉRATION QR CODE ================= */
+    private void showQRCodeDialog(Challenge challenge) {
+        try {
+            // Créer la fenêtre modale
+            Stage qrStage = new Stage();
+            qrStage.setTitle("📱 QR Code - " + challenge.getTitre());
+            qrStage.initModality(Modality.APPLICATION_MODAL);
+            qrStage.initOwner(challengeListView.getScene().getWindow());
+
+            // Récupérer les données liées (coaches et récompenses) pour le QR
+            List<CoachMotivation> coaches = challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge());
+            List<Recompense> recompenses = challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge());
+
+            // Conteneur principal avec fond dégradé
+            VBox root = new VBox(25);
+            root.setPadding(new Insets(30));
+            root.setStyle(
+                    "-fx-background-color: linear-gradient(to bottom, #667eea, #764ba2);" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-border-radius: 20;" +
+                            "-fx-border-width: 2;" +
+                            "-fx-border-color: rgba(255,255,255,0.3);"
+            );
+            root.setAlignment(Pos.CENTER);
+            root.setMinWidth(450);
+            root.setMaxWidth(450);
+
+            // ========== EN-TÊTE AVEC EFFET BRILLANT ==========
+            HBox headerBox = new HBox(15);
+            headerBox.setAlignment(Pos.CENTER);
+
+            Label iconLabel = new Label("📱");
+            iconLabel.setStyle("-fx-font-size: 48px; -fx-text-fill: white;");
+
+            Label titleLabel = new Label("QR CODE DU CHALLENGE");
+            titleLabel.setStyle(
+                    "-fx-font-size: 20px;" +
+                            "-fx-font-weight: 900;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.3), 5, 0, 0, 2);"
+            );
+
+            headerBox.getChildren().addAll(iconLabel, titleLabel);
+
+            // ========== NOM DU CHALLENGE AVEC BADGE ==========
+            HBox challengeNameBox = new HBox(10);
+            challengeNameBox.setAlignment(Pos.CENTER);
+            challengeNameBox.setStyle(
+                    "-fx-background-color: rgba(255,255,255,0.2);" +
+                            "-fx-background-radius: 30;" +
+                            "-fx-padding: 12 25;"
+            );
+
+            Label challengeIcon = new Label("🏆");
+            challengeIcon.setStyle("-fx-font-size: 18px;");
+
+            Label challengeName = new Label(challenge.getTitre());
+            challengeName.setStyle(
+                    "-fx-font-size: 16px;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-text-fill: white;"
+            );
+            challengeName.setWrapText(true);
+            challengeName.setMaxWidth(300);
+            challengeName.setAlignment(Pos.CENTER);
+
+            challengeNameBox.getChildren().addAll(challengeIcon, challengeName);
+
+            // ========== GÉNÉRATION DU QR CODE ==========
+            // Construire les données du QR Code (Inclut toutes les infos)
+            String qrData = buildQRData(challenge, coaches, recompenses);
+
+            // Générer l'image QR Code
+            javafx.scene.image.Image qrImage = generateQRCodeImage(qrData, 250, 250);
+
+            // Conteneur pour le QR Code avec effet de brillance
+            StackPane qrContainer = new StackPane();
+            qrContainer.setStyle(
+                    "-fx-background-color: white;" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-padding: 20;" +
+                            "-fx-effect: dropshadow(gaussian, rgba(0,0,0,0.4), 25, 0, 0, 8);"
+            );
+
+            ImageView qrImageView = new ImageView(qrImage);
+            qrImageView.setFitWidth(250);
+            qrImageView.setFitHeight(250);
+            qrImageView.setPreserveRatio(true);
+
+            // Effet de lueur autour du QR Code
+            qrImageView.setEffect(new DropShadow(15, javafx.scene.paint.Color.WHITE));
+
+            qrContainer.getChildren().add(qrImageView);
+
+            // ========== INFORMATIONS SUPPLÉMENTAIRES ==========
+            VBox infoBox = new VBox(12);
+            infoBox.setStyle(
+                    "-fx-background-color: rgba(0,0,0,0.3);" +
+                            "-fx-background-radius: 15;" +
+                            "-fx-padding: 20;"
+            );
+            infoBox.setAlignment(Pos.CENTER_LEFT);
+
+            // Ligne 1: ID et Difficulté
+            HBox infoRow1 = new HBox(20);
+            infoRow1.setAlignment(Pos.CENTER);
+
+            // Badge ID
+            HBox idBadge = new HBox(8);
+            idBadge.setAlignment(Pos.CENTER);
+            idBadge.setStyle(
+                    "-fx-background-color: #3498DB;" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-padding: 5 15;"
+            );
+            Label idIcon = new Label("🆔");
+            idIcon.setStyle("-fx-text-fill: white;");
+            Label idValue = new Label("#" + challenge.getIdChallenge());
+            idValue.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+            idBadge.getChildren().addAll(idIcon, idValue);
+
+            // Badge Difficulté
+            HBox difficultyBadge = new HBox(8);
+            difficultyBadge.setAlignment(Pos.CENTER);
+            String diffColor = getDifficultyBadgeColor(challenge.getNiveauDifficulte());
+            difficultyBadge.setStyle(
+                    "-fx-background-color: " + diffColor + ";" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-padding: 5 15;"
+            );
+            Label diffIcon = new Label("🎯");
+            diffIcon.setStyle("-fx-text-fill: white;");
+            Label diffValue = new Label(challenge.getNiveauDifficulte());
+            diffValue.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+            difficultyBadge.getChildren().addAll(diffIcon, diffValue);
+
+            infoRow1.getChildren().addAll(idBadge, difficultyBadge);
+
+            // Ligne 2: Durée et Type
+            HBox infoRow2 = new HBox(20);
+            infoRow2.setAlignment(Pos.CENTER);
+
+            // Badge Durée
+            HBox durationBadge = new HBox(8);
+            durationBadge.setAlignment(Pos.CENTER);
+            durationBadge.setStyle(
+                    "-fx-background-color: #F39C12;" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-padding: 5 15;"
+            );
+            Label durationIcon = new Label("⏱️");
+            durationIcon.setStyle("-fx-text-fill: white;");
+            Label durationValue = new Label(challenge.getDureeJours() + " jours");
+            durationValue.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+            durationBadge.getChildren().addAll(durationIcon, durationValue);
+
+            // Badge Type
+            HBox typeBadge = new HBox(8);
+            typeBadge.setAlignment(Pos.CENTER);
+            typeBadge.setStyle(
+                    "-fx-background-color: #E67E22;" +
+                            "-fx-background-radius: 20;" +
+                            "-fx-padding: 5 15;"
+            );
+            Label typeIcon = new Label("📂");
+            typeIcon.setStyle("-fx-text-fill: white;");
+            Label typeValue = new Label(challenge.getTypeChallenge());
+            typeValue.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+            typeBadge.getChildren().addAll(typeIcon, typeValue);
+
+            infoRow2.getChildren().addAll(durationBadge, typeBadge);
+
+            infoBox.getChildren().addAll(infoRow1, infoRow2);
+
+            // ========== BOUTONS D'ACTION ==========
+            HBox actionBox = new HBox(20);
+            actionBox.setAlignment(Pos.CENTER);
+
+            // Bouton Télécharger
+            Button downloadBtn = new Button("💾 Télécharger QR");
+            downloadBtn.setStyle(
+                    "-fx-background-color: #2ECC71;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-font-size: 13px;" +
+                            "-fx-padding: 10 20;" +
+                            "-fx-background-radius: 25;" +
+                            "-fx-cursor: hand;"
+            );
+
+            // Bouton Partager
+            Button shareBtn = new Button("📤 Partager");
+            shareBtn.setStyle(
+                    "-fx-background-color: #3498DB;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-font-size: 13px;" +
+                            "-fx-padding: 10 20;" +
+                            "-fx-background-radius: 25;" +
+                            "-fx-cursor: hand;"
+            );
+
+            // Bouton Imprimer
+            Button printBtn = new Button("🖨️ Imprimer");
+            printBtn.setStyle(
+                    "-fx-background-color: #9B59B6;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-font-size: 13px;" +
+                            "-fx-padding: 10 20;" +
+                            "-fx-background-radius: 25;" +
+                            "-fx-cursor: hand;"
+            );
+
+            actionBox.getChildren().addAll(downloadBtn, shareBtn, printBtn);
+
+            // ========== BOUTON FERMER ==========
+            Button closeButton = new Button("❌ Fermer");
+            closeButton.setStyle(
+                    "-fx-background-color: #E74C3C;" +
+                            "-fx-text-fill: white;" +
+                            "-fx-font-weight: bold;" +
+                            "-fx-font-size: 14px;" +
+                            "-fx-padding: 12 40;" +
+                            "-fx-background-radius: 30;" +
+                            "-fx-cursor: hand;"
+            );
+            closeButton.setOnAction(e -> qrStage.close());
+
+            // ========== PIED DE PAGE ==========
+            Label footerLabel = new Label("✨ Scannez pour accéder rapidement au challenge");
+            footerLabel.setStyle(
+                    "-fx-font-size: 11px;" +
+                            "-fx-text-fill: rgba(255,255,255,0.8);" +
+                            "-fx-font-style: italic;"
+            );
+
+            // ========== ASSEMBLAGE FINAL ==========
+            root.getChildren().addAll(
+                    headerBox,
+                    challengeNameBox,
+                    qrContainer,
+                    infoBox,
+                    actionBox,
+                    closeButton,
+                    footerLabel
+            );
+
+            // Animation d'apparition
+            root.setOpacity(0);
+            javafx.animation.FadeTransition fadeIn = new javafx.animation.FadeTransition(
+                    javafx.util.Duration.millis(300), root
+            );
+            fadeIn.setFromValue(0);
+            fadeIn.setToValue(1);
+            fadeIn.play();
+
+            // ScrollPane pour le contenu
+            ScrollPane scrollPane = new ScrollPane(root);
+            scrollPane.setStyle(
+                    "-fx-background-color: transparent;" +
+                            "-fx-background: transparent;" +
+                            "-fx-border-color: transparent;"
+            );
+            scrollPane.setFitToWidth(true);
+            scrollPane.setFitToHeight(true);
+
+            Scene scene = new Scene(scrollPane, 500, 700);
+            qrStage.setScene(scene);
+            qrStage.show();
+
+            // ========== ACTIONS DES BOUTONS ==========
+            downloadBtn.setOnAction(e -> downloadQRCode(qrImage, challenge));
+            shareBtn.setOnAction(e -> shareQRCode(challenge));
+            printBtn.setOnAction(e -> printQRCode(qrImage, challenge));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Impossible de générer le QR Code: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+
+    private String buildQRData(Challenge challenge, List<CoachMotivation> coaches, List<Recompense> recompenses) {
+        StringBuilder sb = new StringBuilder();
+        // Format très compact pour accélérer le scan
+        sb.append("🏆 ").append(challenge.getTitre().toUpperCase()).append("\n");
+        sb.append("ID: #").append(challenge.getIdChallenge()).append("\n");
+        
+        // Description très courte
+        String desc = challenge.getDescription();
+        if (desc.length() > 80) desc = desc.substring(0, 77) + "...";
+        sb.append("DESC: ").append(desc).append("\n");
+        
+        sb.append("⏱️ ").append(challenge.getDureeJours()).append("j | 🎯 ").append(challenge.getNiveauDifficulte()).append("\n");
+        
+        if (coaches != null && !coaches.isEmpty()) {
+            sb.append("👨‍🏫 ").append(coaches.get(0).getNomCoach());
+            if (coaches.size() > 1) sb.append(" +").append(coaches.size() - 1);
+            sb.append("\n");
+        }
+        
+        if (recompenses != null && !recompenses.isEmpty()) {
+            sb.append("🎁 ").append(recompenses.get(0).getTitre());
+            if (recompenses.size() > 1) sb.append(" +").append(recompenses.size() - 1);
+            sb.append("\n");
+        }
+        
+        sb.append("✨ MotivationManager Pro");
+        return sb.toString();
+    }
+
+
+    private javafx.scene.image.Image generateQRCodeImage(String data, int width, int height) {
+        try {
+            // Configuration du QR Code
+            Map<com.google.zxing.EncodeHintType, Object> hints = new java.util.HashMap<>();
+            hints.put(com.google.zxing.EncodeHintType.ERROR_CORRECTION, com.google.zxing.qrcode.decoder.ErrorCorrectionLevel.H);
+            hints.put(com.google.zxing.EncodeHintType.CHARACTER_SET, "UTF-8");
+            hints.put(com.google.zxing.EncodeHintType.MARGIN, 2);
+
+            // Génération de la matrice du QR Code
+            com.google.zxing.qrcode.QRCodeWriter qrCodeWriter = new com.google.zxing.qrcode.QRCodeWriter();
+            com.google.zxing.common.BitMatrix bitMatrix = qrCodeWriter.encode(
+                    data,
+                    com.google.zxing.BarcodeFormat.QR_CODE,
+                    width,
+                    height,
+                    hints
+            );
+
+            // Convertir en BufferedImage avec couleurs personnalisées
+            java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(
+                    width, height, java.awt.image.BufferedImage.TYPE_INT_RGB
+            );
+
+            // Définition des couleurs Pro (Contraste Élevé pour scan facile)
+            java.awt.Color darkColor = new java.awt.Color(20, 20, 40); // Presque noir pour un meilleur scan
+            java.awt.Color lightColor = new java.awt.Color(60, 20, 80); // Pour le dégradé stylé
+            java.awt.Color bgColor = java.awt.Color.WHITE;
+
+            // Colorier le QR Code
+            for (int x = 0; x < width; x++) {
+                for (int y = 0; y < height; y++) {
+                    if (bitMatrix.get(x, y)) {
+                        // Dégradé avec un contraste fort
+                        float ratio = (float) (x + y) / (width + height);
+                        int red = (int) (darkColor.getRed() * (1 - ratio) + lightColor.getRed() * ratio);
+                        int green = (int) (darkColor.getGreen() * (1 - ratio) + lightColor.getGreen() * ratio);
+                        int blue = (int) (darkColor.getBlue() * (1 - ratio) + lightColor.getBlue() * ratio);
+                        bufferedImage.setRGB(x, y, new java.awt.Color(red, green, blue).getRGB());
+                    } else {
+                        bufferedImage.setRGB(x, y, bgColor.getRGB());
+                    }
+                }
+            }
+
+            // Ajouter le logo au centre pour le côté "Creative/Pro"
+            addLogoToQRCode(bufferedImage);
+
+            // Convertir en JavaFX Image
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            javax.imageio.ImageIO.write(bufferedImage, "png", out);
+            byte[] imageBytes = out.toByteArray();
+
+            return new javafx.scene.image.Image(new java.io.ByteArrayInputStream(imageBytes));
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Erreur de génération QR Code: " + e.getMessage(), Alert.AlertType.ERROR);
+            return null;
+        }
+    }
+
+    private void addLogoToQRCode(java.awt.image.BufferedImage qrImage) {
+        try {
+            int width = qrImage.getWidth();
+            int height = qrImage.getHeight();
+            
+            // Taille du logo (environ 1/4 du QR Code pour ErrorCorrection level H)
+            int logoSize = width / 5; // Logo un peu plus petit pour faciliter le scan
+
+            java.awt.Graphics2D g2d = qrImage.createGraphics();
+            
+            // Anti-aliasing pour un rendu pro
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_ANTIALIASING, java.awt.RenderingHints.VALUE_ANTIALIAS_ON);
+            g2d.setRenderingHint(java.awt.RenderingHints.KEY_INTERPOLATION, java.awt.RenderingHints.VALUE_INTERPOLATION_BILINEAR);
+
+            int centerX = (width - logoSize) / 2;
+            int centerY = (height - logoSize) / 2;
+
+            // 1. Fond blanc arrondi pour le logo
+            g2d.setColor(java.awt.Color.WHITE);
+            g2d.fillRoundRect(centerX - 5, centerY - 5, logoSize + 10, logoSize + 10, 20, 20);
+            
+            // 2. Bordure dégradée
+            java.awt.GradientPaint gp = new java.awt.GradientPaint(
+                centerX, centerY, new java.awt.Color(52, 152, 219),
+                centerX + logoSize, centerY + logoSize, new java.awt.Color(155, 89, 182)
+            );
+            g2d.setPaint(gp);
+            g2d.setStroke(new java.awt.BasicStroke(3));
+            g2d.drawRoundRect(centerX - 5, centerY - 5, logoSize + 10, logoSize + 10, 20, 20);
+
+            // 3. Dessiner l'icône/logo (🏆)
+            g2d.setFont(new java.awt.Font("Segoe UI Emoji", java.awt.Font.BOLD, logoSize * 2/3));
+            
+            // Calculer la position pour centrer l'émoji
+            java.awt.FontMetrics metrics = g2d.getFontMetrics();
+            int emojiX = centerX + (logoSize - metrics.stringWidth("🏆")) / 2;
+            int emojiY = centerY + ((logoSize - metrics.getHeight()) / 2) + metrics.getAscent();
+            
+            g2d.setColor(java.awt.Color.BLACK);
+            g2d.drawString("🏆", emojiX, emojiY);
+
+            g2d.dispose();
+
+        } catch (Exception e) {
+            System.err.println("Erreur ajout logo QR: " + e.getMessage());
+        }
+    }
+
+    private void downloadQRCode(javafx.scene.image.Image qrImage, Challenge challenge) {
+        try {
+            FileChooser fileChooser = new FileChooser();
+            fileChooser.setTitle("Sauvegarder le QR Code");
+            fileChooser.setInitialFileName("qrcode_challenge_" + challenge.getIdChallenge() + ".png");
+            fileChooser.getExtensionFilters().add(
+                    new FileChooser.ExtensionFilter("Images PNG", "*.png")
+            );
+
+            // Remplacer qrCodeBtn.getScene().getWindow() par une référence à la fenêtre actuelle
+            // Option 1: Utiliser la fenêtre du challengeListView
+            File file = fileChooser.showSaveDialog(challengeListView.getScene().getWindow());
+
+            if (file != null) {
+                // Convertir Image JavaFX en BufferedImage
+                javafx.scene.image.PixelReader reader = qrImage.getPixelReader();
+                int width = (int) qrImage.getWidth();
+                int height = (int) qrImage.getHeight();
+
+                javafx.scene.image.WritableImage writableImage = new javafx.scene.image.WritableImage(
+                        reader, width, height
+                );
+
+                java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(
+                        width, height, java.awt.image.BufferedImage.TYPE_INT_RGB
+                );
+
+                for (int x = 0; x < width; x++) {
+                    for (int y = 0; y < height; y++) {
+                        javafx.scene.paint.Color color = writableImage.getPixelReader().getColor(x, y);
+                        int rgb = new java.awt.Color(
+                                (float) color.getRed(),
+                                (float) color.getGreen(),
+                                (float) color.getBlue()
+                        ).getRGB();
+                        bufferedImage.setRGB(x, y, rgb);
+                    }
+                }
+
+                javax.imageio.ImageIO.write(bufferedImage, "png", file);
+
+                showAlert("Succès",
+                        "✅ QR Code sauvegardé avec succès !\n\n" +
+                                "📁 Emplacement: " + file.getAbsolutePath(),
+                        Alert.AlertType.INFORMATION
+                );
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Erreur lors de la sauvegarde: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void shareQRCode(Challenge challenge) {
+        try {
+            // Créer une boîte de dialogue pour l'email
+            TextInputDialog dialog = new TextInputDialog("");
+            dialog.setTitle("Partager le QR Code");
+            dialog.setHeaderText("Envoyer le QR Code du challenge par Email");
+            dialog.setContentText("Adresse Email du destinataire:");
+            dialog.initOwner(challengeListView.getScene().getWindow());
+
+            Optional<String> result = dialog.showAndWait();
+            if (result.isPresent() && !result.get().isEmpty()) {
+                String email = result.get();
+                
+                // Générer temporairement l'image pour l'envoi
+                String qrData = buildQRData(challenge, 
+                    challengeCoachCrud.getCoachesForChallenge(challenge.getIdChallenge()), 
+                    challengeRecompenseCrud.getRecompensesByChallenge(challenge.getIdChallenge()));
+                
+                javafx.scene.image.Image qrImage = generateQRCodeImage(qrData, 500, 500); // HDR Resolution for email
+                
+                // Sauvegarder dans un fichier temporaire
+                File tempFile = File.createTempFile("qrcode_challenge_" + challenge.getIdChallenge(), ".png");
+                
+                // Conversion JavaFX Image -> BufferedImage -> File
+                javafx.scene.image.PixelReader reader = qrImage.getPixelReader();
+                java.awt.image.BufferedImage bufferedImage = new java.awt.image.BufferedImage(
+                        500, 500, java.awt.image.BufferedImage.TYPE_INT_RGB);
+                for (int x = 0; x < 500; x++) {
+                    for (int y = 0; y < 500; y++) {
+                        javafx.scene.paint.Color c = reader.getColor(x, y);
+                        bufferedImage.setRGB(x, y, new java.awt.Color((float)c.getRed(), (float)c.getGreen(), (float)c.getBlue()).getRGB());
+                    }
+                }
+                javax.imageio.ImageIO.write(bufferedImage, "png", tempFile);
+
+                // Envoyer l'email
+                boolean success = EmailSender.sendEmailWithAttachment(
+                    email, 
+                    "🎖️ QR Code Challenge: " + challenge.getTitre(),
+                    "Bonjour,\n\nVous trouverez ci-joint le QR Code pour le challenge : " + challenge.getTitre() + 
+                    "\n\nCe QR Code contient tous les détails (coaches, récompenses, etc.)." +
+                    "\n\nCordialement,\nL'équipe MotivationManager.",
+                    tempFile
+                );
+
+                if (success) {
+                    showAlert("Succès", "✅ QR Code envoyé avec succès à " + email, Alert.AlertType.INFORMATION);
+                } else {
+                    showAlert("Erreur", "❌ Échec de l'envoi de l'email. Vérifiez votre connexion.", Alert.AlertType.ERROR);
+                }
+                
+                tempFile.deleteOnExit();
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Une erreur est survenue lors du partage: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void printQRCode(javafx.scene.image.Image qrImage, Challenge challenge) {
+        try {
+            // Créer une tâche d'impression
+            javafx.print.PrinterJob printerJob = javafx.print.PrinterJob.createPrinterJob();
+
+            if (printerJob != null && printerJob.showPrintDialog(challengeListView.getScene().getWindow())){
+                // Configurer la page
+                javafx.print.PageLayout pageLayout = printerJob.getPrinter().createPageLayout(
+                        javafx.print.Paper.A4,
+                        javafx.print.PageOrientation.PORTRAIT,
+                        javafx.print.Printer.MarginType.DEFAULT
+                );
+
+                // Créer un contenu imprimable
+                VBox printableContent = new VBox(20);
+                printableContent.setAlignment(Pos.CENTER);
+                printableContent.setPadding(new Insets(20));
+
+                // Titre
+                Label titleLabel = new Label(challenge.getTitre());
+                titleLabel.setStyle("-fx-font-size: 18px; -fx-font-weight: bold;");
+
+                // QR Code
+                ImageView qrView = new ImageView(qrImage);
+                qrView.setFitWidth(200);
+                qrView.setFitHeight(200);
+                qrView.setPreserveRatio(true);
+
+                // Informations
+                Label infoLabel = new Label(
+                        "ID: " + challenge.getIdChallenge() + "\n" +
+                                "Difficulté: " + challenge.getNiveauDifficulte()
+                );
+
+                printableContent.getChildren().addAll(titleLabel, qrView, infoLabel);
+
+                // Imprimer
+                boolean success = printerJob.printPage(printableContent);
+                if (success) {
+                    printerJob.endJob();
+                    showAlert("Succès", "QR Code envoyé à l'impression", Alert.AlertType.INFORMATION);
+                }
+            }
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur", "Erreur lors de l'impression: " + e.getMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void openCollaborativeWorkspace(Challenge challenge) {
+        try {
+            Stage stage = new Stage();
+            stage.setTitle("🤝 Espace Collaboratif Pro - " + challenge.getTitre());
+            stage.initModality(Modality.APPLICATION_MODAL);
+            stage.initOwner(challengeListView.getScene().getWindow());
+
+            // --- MAIN LAYOUT (Glassmorphism) ---
+            BorderPane root = new BorderPane();
+            root.setStyle("-fx-background-color: linear-gradient(to bottom right, #0f172a, #1e293b); -fx-padding: 0;");
+
+            // --- HEADER AVEC BARRE DE PROGRESSION ---
+            VBox header = new VBox(15);
+            header.setStyle("-fx-background-color: rgba(30, 41, 59, 0.9); -fx-padding: 25; -fx-border-color: rgba(255,255,255,0.08); -fx-border-width: 0 0 1 0;");
+            
+            HBox titleRow = new HBox(15);
+            titleRow.setAlignment(Pos.CENTER_LEFT);
+            Label title = new Label("ESPACE COLLABORATIF");
+            title.setStyle("-fx-font-size: 26px; -fx-font-weight: 900; -fx-text-fill: white; -fx-letter-spacing: 2px;");
+            Region spacerTitle = new Region();
+            HBox.setHgrow(spacerTitle, Priority.ALWAYS);
+            Label subTitle = new Label(challenge.getTitre().toUpperCase());
+            subTitle.setStyle("-fx-font-size: 14px; -fx-text-fill: #38bdf8; -fx-font-weight: bold; -fx-background-color: rgba(56,189,248,0.1); -fx-padding: 5 15; -fx-background-radius: 15;");
+            titleRow.getChildren().addAll(title, spacerTitle, subTitle);
+
+            // Progress Section
+            VBox progressContainer = new VBox(8);
+            HBox progressInfo = new HBox();
+            Label progressLabel = new Label("Progression de l'équipe");
+            progressLabel.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 11px; -fx-font-weight: bold;");
+            Region pSpacer = new Region();
+            HBox.setHgrow(pSpacer, Priority.ALWAYS);
+            Label percentLabel = new Label("0%");
+            percentLabel.setStyle("-fx-text-fill: #10b981; -fx-font-weight: bold;");
+            progressInfo.getChildren().addAll(progressLabel, pSpacer, percentLabel);
+
+            ProgressBar teamProgress = new ProgressBar(0);
+            teamProgress.setMaxWidth(Double.MAX_VALUE);
+            teamProgress.setPrefHeight(10);
+            teamProgress.setStyle("-fx-accent: #10b981;");
+
+            progressContainer.getChildren().addAll(progressInfo, teamProgress);
+            header.getChildren().addAll(titleRow, progressContainer);
+            root.setTop(header);
+
+            // --- SIDEBAR (LEADERBOARD) ---
+            VBox sidebar = new VBox(20);
+            sidebar.setPrefWidth(300);
+            sidebar.setStyle("-fx-background-color: rgba(15, 23, 42, 0.4); -fx-padding: 25; -fx-border-color: rgba(255,255,255,0.05); -fx-border-width: 0 1 0 0;");
+            
+            Label lbTitle = new Label("🏆 TOP CONTRIBUTEURS");
+            lbTitle.setStyle("-fx-font-size: 15px; -fx-font-weight: 800; -fx-text-fill: #f59e0b; -fx-letter-spacing: 1px;");
+            
+            ListView<TeamMember> leaderboard = new ListView<>();
+            leaderboard.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent; -fx-border-width: 0;");
+            leaderboard.setCellFactory(lv -> new ListCell<TeamMember>() {
+                @Override
+                protected void updateItem(TeamMember m, boolean empty) {
+                    super.updateItem(m, empty);
+                    if (empty || m == null) {
+                        setGraphic(null);
+                    } else {
+                        HBox row = new HBox(12);
+                        row.setAlignment(Pos.CENTER_LEFT);
+                        row.setStyle("-fx-padding: 10; -fx-background-color: rgba(255,255,255,0.03); -fx-background-radius: 12; -fx-margin-bottom: 5;");
+                        
+                        StackPane avatar = new StackPane();
+                        Circle bg = new Circle(18, Color.web(getIndex() == 0 ? "#f59e0b" : "#334155"));
+                        Label initial = new Label(m.getUserName().substring(0, 1).toUpperCase());
+                        initial.setStyle("-fx-text-fill: white; -fx-font-weight: bold;");
+                        avatar.getChildren().addAll(bg, initial);
+
+                        VBox details = new VBox(2);
+                        Label name = new Label(m.getUserName());
+                        name.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 13px;");
+                        Label rank = new Label("#" + (getIndex() + 1) + " dans l'équipe");
+                        rank.setStyle("-fx-text-fill: #64748b; -fx-font-size: 10px;");
+                        details.getChildren().addAll(name, rank);
+
+                        Region mSpacer = new Region();
+                        HBox.setHgrow(mSpacer, Priority.ALWAYS);
+                        Label pts = new Label(m.getPoints() + " XP");
+                        pts.setStyle("-fx-text-fill: #10b981; -fx-font-weight: 900; -fx-font-size: 12px;");
+                        
+                        row.getChildren().addAll(avatar, details, mSpacer, pts);
+                        setGraphic(row);
+                    }
+                }
+            });
+
+            Button joinBtn = new Button("➕ REJOINDRE L'ÉQUIPE");
+            joinBtn.setMaxWidth(Double.MAX_VALUE);
+            joinBtn.setCursor(Cursor.HAND);
+            joinBtn.setStyle("-fx-background-color: linear-gradient(to right, #3b82f6, #2563eb); -fx-text-fill: white; -fx-font-weight: 900; -fx-background-radius: 12; -fx-padding: 12; -fx-effect: dropshadow(gaussian, rgba(37,99,235,0.3), 10, 0, 0, 5);");
+            
+            sidebar.getChildren().addAll(lbTitle, leaderboard, joinBtn);
+            root.setLeft(sidebar);
+
+            // --- CENTER (TASKS & CHAT) ---
+            VBox center = new VBox(25);
+            center.setStyle("-fx-padding: 25;");
+            
+            Label tasksTitle = new Label("🎯 OBJECTIFS COMMUNS");
+            tasksTitle.setStyle("-fx-font-size: 15px; -fx-font-weight: 800; -fx-text-fill: #38bdf8; -fx-letter-spacing: 1px;");
+            
+            ListView<Task> taskListView = new ListView<>();
+            taskListView.setPrefHeight(280);
+            taskListView.setStyle("-fx-background-color: transparent; -fx-control-inner-background: transparent; -fx-border-width: 0;");
+            taskListView.setCellFactory(lv -> new ListCell<Task>() {
+                @Override
+                protected void updateItem(Task t, boolean empty) {
+                    super.updateItem(t, empty);
+                    if (empty || t == null) {
+                        setGraphic(null);
+                    } else {
+                        HBox row = new HBox(15);
+                        row.setAlignment(Pos.CENTER_LEFT);
+                        row.setStyle("-fx-padding: 15; -fx-background-color: " + (t.isCompleted() ? "rgba(16,185,129,0.08)" : "rgba(255,255,255,0.04)") + 
+                                   "; -fx-background-radius: 15; -fx-border-color: " + (t.isCompleted() ? "rgba(16,185,129,0.3)" : "rgba(255,255,255,0.1)") + "; -fx-border-width: 1;");
+                        
+                        CheckBox cb = new CheckBox();
+                        cb.setSelected(t.isCompleted());
+                        cb.setScaleX(1.2); cb.setScaleY(1.2);
+                        
+                        VBox info = new VBox(5);
+                        Label lblT = new Label(t.getTitle());
+                        lblT.setStyle("-fx-text-fill: white; -fx-font-weight: bold; -fx-font-size: 15px; " + (t.isCompleted() ? "-fx-strikethrough: true; -fx-opacity: 0.6;" : ""));
+                        Label lblD = new Label(t.getDescription());
+                        lblD.setStyle("-fx-text-fill: #94a3b8; -fx-font-size: 12px;");
+                        info.getChildren().addAll(lblT, lblD);
+                        
+                        Region tSpacer = new Region();
+                        HBox.setHgrow(tSpacer, Priority.ALWAYS);
+                        
+                        Label badge = new Label(t.isCompleted() ? "COMPLÉTÉ" : "+" + t.getPoints() + " XP");
+                        badge.setStyle("-fx-background-color: " + (t.isCompleted() ? "#10b981" : "#f59e0b") + "; -fx-text-fill: white; -fx-font-size: 10px; -fx-font-weight: 900; -fx-padding: 4 10; -fx-background-radius: 20;");
+                        
+                        row.getChildren().addAll(cb, info, tSpacer, badge);
+                        setGraphic(row);
+
+                        cb.setOnAction(e -> {
+                            t.setCompleted(cb.isSelected());
+                            taskCrud.update(t);
+                            // Animation ici possible
+                            refreshLeaderboard(leaderboard, challenge);
+                            updateProgress(challenge, teamProgress, percentLabel);
+                        });
+                    }
+                }
+            });
+
+            // Chat Section
+            VBox chatBox = new VBox(15);
+            VBox.setVgrow(chatBox, Priority.ALWAYS);
+            chatBox.setStyle("-fx-background-color: rgba(30, 41, 59, 0.4); -fx-background-radius: 20; -fx-padding: 20; -fx-border-color: rgba(255,255,255,0.08);");
+            
+            Label chatTitle = new Label("💬 CANAL DE MOTIVATION");
+            chatTitle.setStyle("-fx-font-size: 15px; -fx-font-weight: 800; -fx-text-fill: #f472b6; -fx-letter-spacing: 1px;");
+            
+            ScrollPane chatScroll = new ScrollPane();
+            VBox chatContent = new VBox(12);
+            chatScroll.setContent(chatContent);
+            chatScroll.setFitToWidth(true);
+            chatScroll.setPrefHeight(250);
+            chatScroll.setStyle("-fx-background: transparent; -fx-background-color: transparent; -fx-padding: 0 10 0 0;");
+            chatScroll.vvalueProperty().bind(chatContent.heightProperty()); // Auto-scroll
+            
+            HBox inputArea = new HBox(12);
+            inputArea.setAlignment(Pos.CENTER_LEFT);
+            TextField chatInput = new TextField();
+            chatInput.setPromptText("Écrire un message motivant...");
+            HBox.setHgrow(chatInput, Priority.ALWAYS);
+            chatInput.setStyle("-fx-background-color: rgba(255,255,255,0.06); -fx-text-fill: white; -fx-background-radius: 25; -fx-padding: 12 20; -fx-border-color: rgba(255,255,255,0.1);");
+            
+            Button sendBtn = new Button("🚀");
+            sendBtn.setCursor(Cursor.HAND);
+            sendBtn.setStyle("-fx-background-color: linear-gradient(to bottom, #ec4899, #db2777); -fx-text-fill: white; -fx-background-radius: 50; -fx-min-width: 45; -fx-min-height: 45; -fx-font-size: 18px; -fx-effect: dropshadow(gaussian, rgba(236,72,153,0.3), 10, 0, 0, 5);");
+            
+            inputArea.getChildren().addAll(chatInput, sendBtn);
+            chatBox.getChildren().addAll(chatTitle, chatScroll, inputArea);
+            
+            center.getChildren().addAll(tasksTitle, taskListView, chatBox);
+            root.setCenter(center);
+
+            // --- LOGIC & REAL-TIME UPDATES ---
+            String[] userSessionPseudo = {null};
+            int currentUserId = Session.getUserId();
+            userSessionPseudo[0] = collaborativeCrud.findPseudoByUserId(currentUserId);
+
+            updateProgress(challenge, teamProgress, percentLabel);
+            refreshLeaderboard(leaderboard, challenge);
+            taskListView.getItems().setAll(taskCrud.getTasksByChallenge(challenge.getIdChallenge()));
+            refreshChat(chatContent, challenge, userSessionPseudo[0]);
+
+            // Simulation du temps réel par Polling
+            Timeline autoRefresh = new Timeline(new KeyFrame(Duration.seconds(4), event -> {
+                refreshLeaderboard(leaderboard, challenge);
+                refreshChat(chatContent, challenge, userSessionPseudo[0]);
+                updateProgress(challenge, teamProgress, percentLabel);
+            }));
+            autoRefresh.setCycleCount(Animation.INDEFINITE);
+            autoRefresh.play();
+
+            // S'assurer d'arrêter le polling quand on ferme la fenêtre
+            stage.setOnCloseRequest(e -> autoRefresh.stop());
+
+            // Masquer le bouton rejoindre si déjà dans l'équipe
+            if (collaborativeCrud.isUserInChallenge(currentUserId, challenge.getIdChallenge())) {
+                joinBtn.setVisible(false);
+                joinBtn.setManaged(false);
+            }
+
+            joinBtn.setOnAction(e -> {
+                // Si l'utilisateur a déjà un pseudo enregistré mais n'est pas dans CETTE équipe spécifique
+                if (userSessionPseudo[0] != null) {
+                    joinExistingTeam(challenge, userSessionPseudo[0], currentUserId, leaderboard, chatContent, joinBtn);
+                    return;
+                }
+
+                TextInputDialog nameDlg = new TextInputDialog();
+                nameDlg.setTitle("Rejoindre l'équipe");
+                nameDlg.setHeaderText("DEVENIR UN MEMBRE ACTIF");
+                nameDlg.setContentText("Choisissez votre pseudo unique :");
+                nameDlg.initOwner(stage);
+                
+                nameDlg.showAndWait().ifPresent(name -> {
+                    userSessionPseudo[0] = name;
+                    List<Team> teams = collaborativeCrud.getTeamsByChallenge(challenge.getIdChallenge());
+                    Team team;
+                    if (teams.isEmpty()) {
+                        team = new Team(challenge.getIdChallenge(), "Team Alpha");
+                        collaborativeCrud.createTeam(team);
+                    } else {
+                        team = teams.get(0);
+                    }
+                    collaborativeCrud.addMember(new TeamMember(team.getId(), currentUserId, name));
+                    
+                    ChatMessage sysMsg = new ChatMessage(challenge.getIdChallenge(), "SYSTEM", "✨ L'utilisateur '" + name + "' vient de rejoindre l'aventure !");
+                    collaborativeCrud.saveChatMessage(sysMsg);
+                    
+                    joinBtn.setVisible(false);
+                    joinBtn.setManaged(false);
+                    refreshLeaderboard(leaderboard, challenge);
+                    refreshChat(chatContent, challenge, userSessionPseudo[0]);
+                    showAlert("Bienvenue", "Félicitations " + name + " ! Vous faites maintenant partie de l'équipe.", Alert.AlertType.INFORMATION);
+                });
+            });
+
+            sendBtn.setOnAction(e -> {
+                String msgText = chatInput.getText().trim();
+                if (msgText.isEmpty()) return;
+
+                if (userSessionPseudo[0] == null) {
+                    TextInputDialog pseudoDlg = new TextInputDialog();
+                    pseudoDlg.setTitle("Pseudo Requis");
+                    pseudoDlg.setHeaderText("IDENTIFIEZ-VOUS");
+                    pseudoDlg.setContentText("Entrez un nom pour chatter :");
+                    pseudoDlg.initOwner(stage);
+                    pseudoDlg.showAndWait().ifPresent(name -> {
+                        userSessionPseudo[0] = name;
+                        sendMessage(challenge, name, msgText, chatInput, chatContent, userSessionPseudo[0]);
+                    });
+                } else {
+                    sendMessage(challenge, userSessionPseudo[0], msgText, chatInput, chatContent, userSessionPseudo[0]);
+                }
+            });
+
+            chatInput.setOnAction(sendBtn.getOnAction());
+
+            Scene scene = new Scene(root, 1100, 750);
+            scene.setFill(Color.TRANSPARENT);
+            stage.setScene(scene);
+            
+            // Fade-in effect
+            root.setOpacity(0);
+            FadeTransition ft = new FadeTransition(Duration.millis(800), root);
+            ft.setFromValue(0);
+            ft.setToValue(1);
+            ft.play();
+
+            stage.show();
+
+        } catch (Exception e) {
+            e.printStackTrace();
+            showAlert("Erreur Cruciale", "Échec du chargement de l'espace collaboratif: " + e.getLocalizedMessage(), Alert.AlertType.ERROR);
+        }
+    }
+
+    private void joinExistingTeam(Challenge challenge, String pseudo, int userId, ListView<TeamMember> leaderboard, VBox chatContent, Button joinBtn) {
+        List<Team> teams = collaborativeCrud.getTeamsByChallenge(challenge.getIdChallenge());
+        if (teams.isEmpty()) {
+            Team team = new Team(challenge.getIdChallenge(), "Team Alpha");
+            collaborativeCrud.createTeam(team);
+            teams.add(team);
+        }
+        collaborativeCrud.addMember(new TeamMember(teams.get(0).getId(), userId, pseudo));
+        
+        ChatMessage sysMsg = new ChatMessage(challenge.getIdChallenge(), "SYSTEM", "🔄 " + pseudo + " est de retour !");
+        collaborativeCrud.saveChatMessage(sysMsg);
+
+        joinBtn.setVisible(false);
+        joinBtn.setManaged(false);
+        refreshLeaderboard(leaderboard, challenge);
+        refreshChat(chatContent, challenge, pseudo);
+        showAlert("Bon retour", "Ravi de vous revoir " + pseudo + " !", Alert.AlertType.INFORMATION);
+    }
+
+    private void updateProgress(Challenge challenge, ProgressBar bar, Label label) {
+        List<Task> tasks = taskCrud.getTasksByChallenge(challenge.getIdChallenge());
+        if (tasks.isEmpty()) {
+            bar.setProgress(0);
+            label.setText("0%");
+            return;
+        }
+        long completed = tasks.stream().filter(Task::isCompleted).count();
+        double progress = (double) completed / tasks.size();
+        bar.setProgress(progress);
+        label.setText((int) (progress * 100) + "%");
+    }
+
+    private void sendMessage(Challenge challenge, String pseudo, String text, TextField input, VBox container, String currentPseudo) {
+        ChatMessage msg = new ChatMessage(challenge.getIdChallenge(), pseudo, text);
+        collaborativeCrud.saveChatMessage(msg);
+        input.clear();
+        refreshChat(container, challenge, currentPseudo);
+    }
+
+    private void refreshLeaderboard(ListView<TeamMember> lv, Challenge challenge) {
+        List<Team> teams = collaborativeCrud.getTeamsByChallenge(challenge.getIdChallenge());
+        if (!teams.isEmpty()) {
+            lv.getItems().setAll(collaborativeCrud.getMembers(teams.get(0).getId()));
+        }
+    }
+
+    private void refreshChat(VBox container, Challenge challenge, String currentPseudo) {
+        container.getChildren().clear();
+        List<ChatMessage> history = collaborativeCrud.getChatHistory(challenge.getIdChallenge());
+        for (ChatMessage msg : history) {
+            VBox msgBubble = new VBox(2);
+            msgBubble.setMaxWidth(300);
+            
+            boolean isSystem = "SYSTEM".equals(msg.getSenderName());
+            boolean isMe = currentPseudo != null && currentPseudo.equals(msg.getSenderName());
+            
+            Label sender = new Label(isMe ? "Moi (" + msg.getSenderName() + ")" : msg.getSenderName());
+            sender.setStyle("-fx-font-size: 9px; -fx-text-fill: " + (isMe ? "#f472b6" : (isSystem ? "#94a3b8" : "#38bdf8")) + "; -fx-font-weight: bold;");
+            
+            Label content = new Label(msg.getMessage());
+            content.setWrapText(true);
+            content.setStyle("-fx-text-fill: " + (isSystem ? "#94a3b8" : "white") + "; " +
+                            "-fx-background-color: " + (isMe ? "#e879f933" : (isSystem ? "transparent" : "#3b82f633")) + "; " +
+                            "-fx-background-radius: 10; -fx-padding: 8 12; -fx-font-size: 13px;");
+            
+            msgBubble.getChildren().addAll(sender, content);
+            if (isMe) msgBubble.setAlignment(Pos.CENTER_RIGHT);
+            else if (isSystem) msgBubble.setAlignment(Pos.CENTER);
+            else msgBubble.setAlignment(Pos.CENTER_LEFT);
+            
+            container.getChildren().add(msgBubble);
+        }
+        // Auto-scroll to bottom (simulate)
+    }
+
+    private String getDifficultyBadgeColor(String difficulty) {
+        if (difficulty == null) return "#3498DB";
+
+        switch (difficulty.toLowerCase()) {
+            case "facile": return "#27AE60";
+            case "moyen": return "#F39C12";
+            case "difficile": return "#E74C3C";
+            case "expert": return "#8E44AD";
+            default: return "#3498DB";
         }
     }
 }

@@ -15,8 +15,7 @@ public class Challenge {
     private List<CoachMotivation> coaches = new ArrayList<>();
 
     // Constructeurs
-    public Challenge() {
-    }
+    public Challenge() {}
 
     public Challenge(String titre, String description, int dureeJours, String niveauDifficulte, String typeChallenge) {
         this.titre = titre;
@@ -26,6 +25,7 @@ public class Challenge {
         this.typeChallenge = typeChallenge;
         this.actif = true;
     }
+
 
     public List<CoachMotivation> getCoaches() {
         return coaches;
@@ -49,7 +49,6 @@ public class Challenge {
         }
         return names.toString();
     }
-
     // Getters et Setters
     public int getIdChallenge() {
         return idChallenge;
