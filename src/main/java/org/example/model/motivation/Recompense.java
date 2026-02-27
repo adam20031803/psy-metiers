@@ -1,4 +1,4 @@
-package org.example.model;
+package org.example.model.motivation;
 
 public class Recompense {
     private int idRecompense;

@@ -1,4 +1,4 @@
-package org.example.controller;
+package org.example.controller.motivation;
 
 import javafx.animation.Animation;
 import javafx.animation.KeyFrame;
@@ -14,12 +14,12 @@ import javafx.scene.control.Label;
 import javafx.scene.layout.VBox;
 import javafx.scene.shape.Rectangle;
 import javafx.util.Duration;
-import org.example.dao.ChallengeCrud;
-import org.example.dao.CoachMotivationCrud;
-import org.example.dao.RecompenseCrud;
-import org.example.model.Challenge;
-import org.example.model.CoachMotivation;
-import org.example.model.Recompense;
+import org.example.dao.motivation.ChallengeCrud;
+import org.example.dao.motivation.CoachMotivationCrud;
+import org.example.dao.motivation.RecompenseCrud;
+import org.example.model.motivation.Challenge;
+import org.example.model.motivation.CoachMotivation;
+import org.example.model.motivation.Recompense;
 
 import java.net.URL;
 import java.time.LocalDateTime;
@@ -283,31 +283,26 @@ public class DashboardStatistiquesController implements Initializable {
 
     @FXML
     private void retournerVersChallenges() {
-        try {
-            // Charger le fichier FXML de la page des challenges
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/MainView.fxml"));
-            Parent root = loader.load();
+        Stage stage = (Stage) logoAccueil.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Challenge Manager Pro");
+    }
 
-            // Obtenir la scène actuelle
-            Stage stage = (Stage) logoAccueil.getScene().getWindow();
+    @FXML
+    private void onGoHome() {
+        Stage stage = (Stage) logoAccueil.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Challenge Manager Pro");
+    }
 
-            // Changer de scène
-            stage.setScene(new Scene(root));
-            stage.setTitle("Challenge Manager Pro");
-            stage.centerOnScreen();
+    @FXML
+    private void goToCoaches() {
+        Stage stage = (Stage) logoAccueil.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/coach.fxml", "👨‍🏫 Gestion Coaches");
+    }
 
-            // Animation de transition (optionnelle)
-            javafx.animation.FadeTransition fade = new javafx.animation.FadeTransition(
-                    javafx.util.Duration.millis(300), root
-            );
-            fade.setFromValue(0);
-            fade.setToValue(1);
-            fade.play();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            showError("Erreur de navigation", "Impossible de retourner à la page des challenges");
-        }
+    @FXML
+    private void goToRecompenses() {
+        Stage stage = (Stage) logoAccueil.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/RecompenseView.fxml", "🏆 Gestion des Récompenses");
     }
 
     // Ajoutez aussi cette méthode utilitaire si elle n'existe pas déjà

@@ -1,4 +1,4 @@
-package org.example.controller;
+package org.example.controller.motivation;
 
 import javafx.collections.FXCollections;
 import javafx.collections.ObservableList;
@@ -14,8 +14,8 @@ import javafx.scene.layout.Priority;
 import javafx.scene.layout.Region;
 import javafx.scene.layout.VBox;
 import javafx.stage.Stage;
-import org.example.dao.RecompenseCrud;
-import org.example.model.Recompense;
+import org.example.dao.motivation.RecompenseCrud;
+import org.example.model.motivation.Recompense;
 
 import java.net.URL;
 import java.util.List;
@@ -75,6 +75,10 @@ public class RecompenseController implements Initializable {
     private Button challengeBtn; // Renommé depuis backBtn
     @FXML
     private Button coachBtn; // Nouveau bouton
+    @FXML
+    private Button dashboardBtn;
+    @FXML
+    private Button homeBtn;
     @FXML
     private Button exportBtn; // Nouveau bouton
 
@@ -493,6 +497,8 @@ public class RecompenseController implements Initializable {
         // Navigation
         if (challengeBtn != null) challengeBtn.setOnAction(e -> goToChallenges());
         if (coachBtn != null) coachBtn.setOnAction(e -> goToCoaches());
+        if (dashboardBtn != null) dashboardBtn.setOnAction(e -> goToDashboard());
+        if (homeBtn != null) homeBtn.setOnAction(e -> onGoHome());
         if (exportBtn != null) exportBtn.setOnAction(e -> exportToPDF());
 
         // Gestion des associations (à conserver si nécessaire)
@@ -665,37 +671,23 @@ public class RecompenseController implements Initializable {
     // ================= MÉTHODES DE NAVIGATION =================
 
     private void goToChallenges() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/MainView.fxml"));
-            Parent root = loader.load();
-
-            Stage stage = (Stage) challengeBtn.getScene().getWindow();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
-            stage.setTitle("Gestion des Challenges");
-            stage.show();
-
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible de revenir aux challenges", Alert.AlertType.ERROR);
-        }
+        Stage stage = (Stage) challengeBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Gestion des Challenges");
     }
 
     private void goToCoaches() {
-        try {
-            FXMLLoader loader = new FXMLLoader(getClass().getResource("/coach.fxml"));
-            Parent root = loader.load();
+        Stage stage = (Stage) coachBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/coach.fxml", "Gestion des Coaches");
+    }
 
-            Stage stage = (Stage) coachBtn.getScene().getWindow();
-            Scene scene = new Scene(root);
-            stage.setScene(scene);
-            stage.setTitle("Gestion des Coaches");
-            stage.show();
+    private void goToDashboard() {
+        Stage stage = (Stage) dashboardBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/dashboard_statistiques.fxml", "📊 Dashboard Statistiques");
+    }
 
-        } catch (Exception e) {
-            e.printStackTrace();
-            showAlert("Erreur", "Impossible d'ouvrir la gestion des coaches", Alert.AlertType.ERROR);
-        }
+    private void onGoHome() {
+        Stage stage = (Stage) homeBtn.getScene().getWindow();
+        org.example.controller.SceneUtil.switchTo(stage, "/org/example/ui/motivation/MainView.fxml", "Challenge Manager Pro");
     }
 
 /*    private void exportToPDF() {

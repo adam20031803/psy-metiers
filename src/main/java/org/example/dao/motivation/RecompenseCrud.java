@@ -1,6 +1,6 @@
-package org.example.dao;
+package org.example.dao.motivation;
 
-import org.example.model.Recompense;
+import org.example.model.motivation.Recompense;
 
 import java.sql.*;
 import java.util.ArrayList;

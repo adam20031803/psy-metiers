@@ -1,4 +1,4 @@
-package org.example.model;
+package org.example.model.motivation;
 
 import java.util.ArrayList;
 import java.util.List;

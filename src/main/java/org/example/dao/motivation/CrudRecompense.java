@@ -1,4 +1,4 @@
-package org.example.dao;
+package org.example.dao.motivation;
 
 import java.util.List;
 
