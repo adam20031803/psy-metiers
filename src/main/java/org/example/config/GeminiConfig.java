@@ -5,7 +5,7 @@ public class GeminiConfig {
     /**
      * Clé API Gemini (gratuite sur https://aistudio.google.com/app/apikey)
      */
-    public static final String API_KEY = "AIzaSyDwppbGLL2BGKhgcyWOwVea35w3vTchkMM";
+    public static final String API_KEY = "";
 
     /**
      * Modèle principal — gemini-2.0-flash (modèle le plus rapide et moderne)
